@@ -7,7 +7,8 @@ namespace Messenger.Domain.Identity;
 public enum ChallengePurpose
 {
     Register = 1,
-    Login = 2
+    Login = 2,
+    PhoneChange = 3
 }
 
 public enum ChallengeValidation
@@ -87,6 +88,8 @@ public sealed class LoginChallenge : Entity
         ConsumedAt = now;
         return ChallengeValidation.Valid;
     }
+
+    public void MarkConsumed(DateTimeOffset consumedAt) => ConsumedAt = consumedAt;
 
     private static bool FixedTimeEquals(string expected, string actual) =>
         CryptographicOperations.FixedTimeEquals(

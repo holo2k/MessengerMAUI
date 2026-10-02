@@ -1,6 +1,7 @@
 using Messenger.Application.Security;
 using Messenger.Domain.Common;
 using Messenger.Domain.Identity;
+using Messenger.Application.Users;
 
 namespace Messenger.Application.Identity;
 
@@ -12,6 +13,7 @@ public sealed class AuthService(
     ISmsSender smsSender,
     IAccessTokenIssuer accessTokenIssuer,
     IRefreshTokenGenerator refreshTokenGenerator,
+    ITwoFactorService twoFactorService,
     IClock clock,
     AuthOptions options) : IAuthService
 {
@@ -41,15 +43,61 @@ public sealed class AuthService(
         return new PhoneChallengeResult(id, expiresAt);
     }
 
-    public Task<AuthSessionResult> RegisterAsync(
+    public async Task<AuthSessionResult> RegisterAsync(
         CompletePhoneChallengeRequest request,
-        CancellationToken cancellationToken = default) =>
-        CompleteAsync(request, ChallengePurpose.Register, createUser: true, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var (challenge, existingUser) = await VerifyChallengeAsync(
+            request, ChallengePurpose.Register, cancellationToken);
+        if (existingUser is not null)
+        {
+            await store.SaveChangesAsync(cancellationToken);
+            throw new AuthException(AuthErrorCode.PhoneAlreadyRegistered);
+        }
 
-    public Task<AuthSessionResult> LoginAsync(
+        var user = new User(
+            Guid.NewGuid(),
+            challenge.PhoneCiphertext,
+            challenge.PhoneNonce,
+            challenge.PhoneTag,
+            challenge.PhoneKeyVersion,
+            challenge.PhoneBlindIndex,
+            clock.UtcNow);
+        await store.AddUserAsync(user, cancellationToken);
+        return await CreateSessionAsync(user.Id, request.DeviceLabel, cancellationToken);
+    }
+
+    public async Task<AuthLoginResult> LoginAsync(
         CompletePhoneChallengeRequest request,
-        CancellationToken cancellationToken = default) =>
-        CompleteAsync(request, ChallengePurpose.Login, createUser: false, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var (_, user) = await VerifyChallengeAsync(request, ChallengePurpose.Login, cancellationToken);
+        if (user is null)
+        {
+            await store.SaveChangesAsync(cancellationToken);
+            throw new AuthException(AuthErrorCode.PhoneNotRegistered);
+        }
+
+        if (await twoFactorService.IsEnabledAsync(user.Id, cancellationToken))
+        {
+            await store.SaveChangesAsync(cancellationToken);
+            var pending = await twoFactorService.BeginLoginAsync(user.Id, request.DeviceLabel, cancellationToken);
+            return new AuthLoginResult(null, pending);
+        }
+
+        return new AuthLoginResult(
+            await CreateSessionAsync(user.Id, request.DeviceLabel, cancellationToken),
+            null);
+    }
+
+    public async Task<AuthSessionResult> ConfirmTwoFactorAsync(
+        string pendingToken,
+        string code,
+        CancellationToken cancellationToken = default)
+    {
+        var verified = await twoFactorService.ConfirmLoginAsync(pendingToken, code, cancellationToken);
+        return await CreateSessionAsync(verified.UserId, verified.DeviceLabel, cancellationToken);
+    }
 
     public async Task<AuthSessionResult> RefreshAsync(
         string refreshToken,
@@ -89,10 +137,9 @@ public sealed class AuthService(
     public Task LogoutAllAsync(Guid userId, CancellationToken cancellationToken = default) =>
         store.RevokeAllSessionsAsync(userId, clock.UtcNow, cancellationToken);
 
-    private async Task<AuthSessionResult> CompleteAsync(
+    private async Task<(LoginChallenge Challenge, User? User)> VerifyChallengeAsync(
         CompletePhoneChallengeRequest request,
         ChallengePurpose expectedPurpose,
-        bool createUser,
         CancellationToken cancellationToken)
     {
         var challenge = await store.FindChallengeAsync(request.ChallengeId, cancellationToken)
@@ -116,45 +163,28 @@ public sealed class AuthService(
         }
 
         var user = await store.FindUserByPhoneIndexAsync(challenge.PhoneBlindIndex, cancellationToken);
-        if (createUser && user is not null)
-        {
-            await store.SaveChangesAsync(cancellationToken);
-            throw new AuthException(AuthErrorCode.PhoneAlreadyRegistered);
-        }
+        return (challenge, user);
+    }
 
-        if (!createUser && user is null)
-        {
-            await store.SaveChangesAsync(cancellationToken);
-            throw new AuthException(AuthErrorCode.PhoneNotRegistered);
-        }
-
-        if (user is null)
-        {
-            user = new User(
-                Guid.NewGuid(),
-                challenge.PhoneCiphertext,
-                challenge.PhoneNonce,
-                challenge.PhoneTag,
-                challenge.PhoneKeyVersion,
-                challenge.PhoneBlindIndex,
-                clock.UtcNow);
-            await store.AddUserAsync(user, cancellationToken);
-        }
-
+    private async Task<AuthSessionResult> CreateSessionAsync(
+        Guid userId,
+        string deviceLabel,
+        CancellationToken cancellationToken)
+    {
         var refreshToken = refreshTokenGenerator.Generate();
         var refreshExpiresAt = clock.UtcNow.Add(options.RefreshTokenLifetime);
         await store.AddRefreshSessionAsync(
             new RefreshSession(
                 Guid.NewGuid(),
-                user.Id,
-                request.DeviceLabel,
+                userId,
+                deviceLabel,
                 Guid.NewGuid(),
                 refreshTokenGenerator.Hash(refreshToken),
                 clock.UtcNow,
                 refreshExpiresAt),
             cancellationToken);
         await store.SaveChangesAsync(cancellationToken);
-        return IssueResult(user.Id, refreshToken, refreshExpiresAt);
+        return IssueResult(userId, refreshToken, refreshExpiresAt);
     }
 
     private AuthSessionResult IssueResult(Guid userId, string refreshToken, DateTimeOffset refreshExpiresAt)

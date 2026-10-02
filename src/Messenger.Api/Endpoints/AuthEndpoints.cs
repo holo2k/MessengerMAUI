@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Messenger.Application.Identity;
 using Messenger.Contracts.Auth;
 using Messenger.Domain.Identity;
+using Messenger.Contracts.Users;
 
 namespace Messenger.Api.Endpoints;
 
@@ -39,9 +40,24 @@ public static class AuthEndpoints
             CompleteChallengeRequest request,
             IAuthService auth,
             CancellationToken cancellationToken) =>
-            ToResponse(await auth.LoginAsync(
+        {
+            var result = await auth.LoginAsync(
                 new CompletePhoneChallengeRequest(request.ChallengeId, request.Code, request.DeviceLabel),
-                cancellationToken))).RequireRateLimiting("auth-code");
+                cancellationToken);
+            return result.Session is not null
+                ? ToResponse(result.Session)
+                : Results.Accepted(value: new PendingTwoFactorResponse(
+                    true,
+                    result.PendingTwoFactor!.PendingToken,
+                    result.PendingTwoFactor.ExpiresAt));
+        }).RequireRateLimiting("auth-code");
+
+        group.MapPost("/2fa/confirm", async (
+            ConfirmLoginTwoFactorRequest request,
+            IAuthService auth,
+            CancellationToken cancellationToken) =>
+            ToResponse(await auth.ConfirmTwoFactorAsync(request.PendingToken, request.Code, cancellationToken)))
+            .RequireRateLimiting("auth-code");
 
         group.MapPost("/refresh", async (
             RefreshRequest request,

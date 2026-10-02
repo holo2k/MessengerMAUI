@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Messenger.Domain.Identity;
+using Messenger.Domain.Users;
 
 namespace Messenger.Infrastructure.Persistence;
 
@@ -9,6 +10,11 @@ public sealed class MessengerDbContext(DbContextOptions<MessengerDbContext> opti
     public DbSet<User> Users => Set<User>();
     public DbSet<LoginChallenge> LoginChallenges => Set<LoginChallenge>();
     public DbSet<RefreshSession> RefreshSessions => Set<RefreshSession>();
+    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<UserPrivacySettings> UserPrivacySettings => Set<UserPrivacySettings>();
+    public DbSet<UserSecuritySettings> UserSecuritySettings => Set<UserSecuritySettings>();
+    public DbSet<EmailCodeChallenge> EmailCodeChallenges => Set<EmailCodeChallenge>();
+    public DbSet<PendingLogin> PendingLogins => Set<PendingLogin>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MessengerDbContext).Assembly);

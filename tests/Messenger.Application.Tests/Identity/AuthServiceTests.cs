@@ -1,5 +1,6 @@
 using Messenger.Application.Identity;
 using Messenger.Application.Security;
+using Messenger.Application.Users;
 using Messenger.Domain.Common;
 using Messenger.Domain.Identity;
 
@@ -7,6 +8,39 @@ namespace Messenger.Application.Tests.Identity;
 
 public sealed class AuthServiceTests
 {
+    [Fact]
+    public async Task Login_with_enabled_two_factor_returns_pending_token_without_a_session()
+    {
+        var fixture = new AuthFixture();
+        var registration = await fixture.RequestRegistrationChallengeAsync();
+        await fixture.Service.RegisterAsync(new CompletePhoneChallengeRequest(
+            registration.ChallengeId, "111111", "Pixel"));
+        fixture.TwoFactor.Enabled = true;
+        var login = await fixture.Service.RequestChallengeAsync(new PhoneChallengeRequest(
+            "+79991234567", "RU", ChallengePurpose.Login));
+        var sessionsBeforeLogin = fixture.Store.AddedSessionCount;
+
+        var result = await fixture.Service.LoginAsync(new CompletePhoneChallengeRequest(
+            login.ChallengeId, "111111", "iPhone"));
+
+        Assert.Null(result.Session);
+        Assert.Equal("pending-token", result.PendingTwoFactor?.PendingToken);
+        Assert.Equal(sessionsBeforeLogin, fixture.Store.AddedSessionCount);
+    }
+
+    [Fact]
+    public async Task Two_factor_confirmation_issues_session_once()
+    {
+        var fixture = new AuthFixture();
+        var user = fixture.Store.SeedUser("+79991234567", fixture.Clock.UtcNow);
+        fixture.TwoFactor.Verified = new VerifiedPendingLogin(user.Id, "iPhone");
+
+        var session = await fixture.Service.ConfirmTwoFactorAsync("pending-token", "123456");
+
+        Assert.Equal(user.Id, session.UserId);
+        Assert.Equal(1, fixture.Store.AddedSessionCount);
+    }
+
     [Fact]
     public async Task Development_challenge_sends_fixed_code_111111()
     {
@@ -122,6 +156,7 @@ public sealed class AuthServiceTests
                 Sms,
                 new StubAccessTokenIssuer(),
                 new SequenceRefreshTokenGenerator(),
+                TwoFactor,
                 Clock,
                 new AuthOptions());
         }
@@ -129,6 +164,7 @@ public sealed class AuthServiceTests
         public MutableClock Clock { get; } = new(new DateTimeOffset(2026, 10, 3, 0, 0, 0, TimeSpan.Zero));
         public InMemoryIdentityStore Store { get; } = new();
         public RecordingSmsSender Sms { get; } = new();
+        public StubTwoFactorService TwoFactor { get; } = new();
         public AuthService Service { get; }
 
         public Task<PhoneChallengeResult> RequestRegistrationChallengeAsync(string phone = "+79991234567") =>
@@ -180,10 +216,33 @@ public sealed class AuthServiceTests
         public string Hash(string token) => $"hash:{token}";
     }
 
+    private sealed class StubTwoFactorService : ITwoFactorService
+    {
+        public bool Enabled { get; set; }
+        public VerifiedPendingLogin? Verified { get; set; }
+
+        public Task<bool> IsEnabledAsync(Guid userId, CancellationToken cancellationToken = default) => Task.FromResult(Enabled);
+        public Task<PendingLoginResult> BeginLoginAsync(Guid userId, string deviceLabel, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PendingLoginResult("pending-token", DateTimeOffset.UtcNow.AddMinutes(5)));
+        public Task<VerifiedPendingLogin> ConfirmLoginAsync(string pendingToken, string code, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Verified ?? throw new InvalidOperationException());
+        public Task<EmailSetupResult> BeginEmailSetupAsync(Guid userId, string email, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task ConfirmEmailAsync(Guid userId, Guid challengeId, string code, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task DisableAsync(Guid userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
     private sealed class InMemoryIdentityStore : IIdentityStore
     {
         private readonly Dictionary<Guid, LoginChallenge> _challenges = [];
         private readonly Dictionary<string, User> _users = [];
+        public int AddedSessionCount { get; private set; }
+
+        public User SeedUser(string phoneIndex, DateTimeOffset createdAt)
+        {
+            var user = new User(Guid.NewGuid(), phoneIndex, "nonce", "tag", 1, phoneIndex, createdAt);
+            _users.Add(phoneIndex, user);
+            return user;
+        }
 
         public Task AddChallengeAsync(LoginChallenge challenge, CancellationToken cancellationToken)
         {
@@ -203,8 +262,11 @@ public sealed class AuthServiceTests
             return Task.CompletedTask;
         }
 
-        public Task AddRefreshSessionAsync(RefreshSession session, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task AddRefreshSessionAsync(RefreshSession session, CancellationToken cancellationToken)
+        {
+            AddedSessionCount++;
+            return Task.CompletedTask;
+        }
 
         public Task<RefreshSession?> FindRefreshSessionAsync(
             string tokenHash,

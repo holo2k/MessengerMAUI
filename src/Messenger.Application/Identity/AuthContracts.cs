@@ -1,4 +1,5 @@
 using Messenger.Domain.Identity;
+using Messenger.Application.Users;
 
 namespace Messenger.Application.Identity;
 
@@ -14,6 +15,10 @@ public sealed record AuthSessionResult(
     DateTimeOffset AccessTokenExpiresAt,
     string RefreshToken,
     DateTimeOffset RefreshTokenExpiresAt);
+
+public sealed record AuthLoginResult(
+    AuthSessionResult? Session,
+    PendingLoginResult? PendingTwoFactor);
 
 public enum AuthErrorCode
 {

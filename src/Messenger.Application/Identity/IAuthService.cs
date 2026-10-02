@@ -10,8 +10,13 @@ public interface IAuthService
         CompletePhoneChallengeRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<AuthSessionResult> LoginAsync(
+    Task<AuthLoginResult> LoginAsync(
         CompletePhoneChallengeRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<AuthSessionResult> ConfirmTwoFactorAsync(
+        string pendingToken,
+        string code,
         CancellationToken cancellationToken = default);
 
     Task<AuthSessionResult> RefreshAsync(

@@ -33,4 +33,18 @@ public sealed class User : Entity
     public string PhoneBlindIndex { get; private set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset? DeactivatedAt { get; private set; }
+
+    public void ChangePhone(
+        string ciphertext,
+        string nonce,
+        string tag,
+        int keyVersion,
+        string blindIndex)
+    {
+        PhoneCiphertext = ciphertext;
+        PhoneNonce = nonce;
+        PhoneTag = tag;
+        PhoneKeyVersion = keyVersion;
+        PhoneBlindIndex = blindIndex;
+    }
 }

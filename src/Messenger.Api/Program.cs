@@ -4,11 +4,14 @@ using Messenger.Api.Configuration;
 using Messenger.Api.Endpoints;
 using Messenger.Application.Identity;
 using Messenger.Application.Security;
+using Messenger.Application.Users;
 using Messenger.Domain.Common;
 using Messenger.Infrastructure;
 using Messenger.Infrastructure.Identity;
+using Messenger.Infrastructure.Email;
 using Messenger.Infrastructure.Persistence;
 using Messenger.Infrastructure.Security;
+using Messenger.Infrastructure.Users;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -27,6 +30,11 @@ builder.Services.AddDbContext<MessengerDbContext>((serviceProvider, options) =>
 });
 builder.Services.AddScoped<IIdentityStore, EfIdentityStore>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<EfUserSettingsStore>();
+builder.Services.AddScoped<IUserSettingsStore>(serviceProvider => serviceProvider.GetRequiredService<EfUserSettingsStore>());
+builder.Services.AddScoped<ITwoFactorStore>(serviceProvider => serviceProvider.GetRequiredService<EfUserSettingsStore>());
+builder.Services.AddScoped<IProfileService, ProfileService>();
+builder.Services.AddScoped<ITwoFactorService, TwoFactorService>();
 builder.Services.AddSingleton<IFieldCipher>(serviceProvider =>
     new AesGcmFieldCipher(serviceProvider.GetRequiredService<IConfiguration>()
         .GetSection("Encryption").Get<FieldCipherOptions>()
@@ -46,9 +54,17 @@ builder.Services.AddSingleton<IAccessTokenIssuer>(serviceProvider =>
         ?? throw new InvalidOperationException("JWT configuration is required.")));
 builder.Services.AddSingleton<IRefreshTokenGenerator, RefreshTokenGenerator>();
 builder.Services.AddSingleton<IClock, SystemClock>();
+builder.Services.AddSingleton<IOneTimeCodeGenerator, OneTimeCodeGenerator>();
+builder.Services.AddSingleton<IPendingLoginTokenGenerator, PendingLoginTokenGenerator>();
+builder.Services.AddSingleton<IEmailSender>(serviceProvider =>
+    new MailKitEmailSender(serviceProvider.GetRequiredService<IConfiguration>()
+        .GetSection("Smtp").Get<SmtpOptions>() ?? new SmtpOptions()));
 builder.Services.AddSingleton(serviceProvider =>
     serviceProvider.GetRequiredService<IConfiguration>().GetSection("Auth").Get<AuthOptions>()
     ?? new AuthOptions());
+builder.Services.AddSingleton(serviceProvider =>
+    serviceProvider.GetRequiredService<IConfiguration>().GetSection("TwoFactor").Get<TwoFactorOptions>()
+    ?? new TwoFactorOptions());
 builder.Services.AddHostedService<SmsProviderStartupValidator>();
 builder.Services.AddProblemDetails();
 
@@ -113,8 +129,16 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
             (StatusCodes.Status404NotFound, "challenge_not_found"),
         AuthException authException =>
             (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(authException.Code.ToString())),
+        UserSettingsException { Code: UserSettingsError.UsernameTaken } =>
+            (StatusCodes.Status409Conflict, "username_taken"),
+        UserSettingsException { Code: UserSettingsError.UserNotFound } =>
+            (StatusCodes.Status404NotFound, "user_not_found"),
+        UserSettingsException userSettingsException =>
+            (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(userSettingsException.Code.ToString())),
         DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } } =>
             (StatusCodes.Status409Conflict, "phone_already_registered"),
+        IOException =>
+            (StatusCodes.Status503ServiceUnavailable, "email_delivery_unavailable"),
         FormatException =>
             (StatusCodes.Status422UnprocessableEntity, "validation_error"),
         _ => (StatusCodes.Status500InternalServerError, "internal_error")
@@ -135,6 +159,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapAuthEndpoints();
+app.MapProfileEndpoints();
 app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }));
 
 app.Run();

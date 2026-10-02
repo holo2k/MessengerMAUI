@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
@@ -20,6 +21,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Messenger.Contracts\Messenger.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\Messenger.Maui\Features\Auth\LoginViewModel.cs" Link="Features\Auth\LoginViewModel.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Features\Auth\RegistrationViewModel.cs" Link="Features\Auth\RegistrationViewModel.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\ApiClient.cs" Link="Services\ApiClient.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\AuthSessionHandler.cs" Link="Services\AuthSessionHandler.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\ISecureSessionStore.cs" Link="Services\ISecureSessionStore.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\NavigationService.cs" Link="Services\NavigationService.cs" />
   </ItemGroup>
 
 </Project>

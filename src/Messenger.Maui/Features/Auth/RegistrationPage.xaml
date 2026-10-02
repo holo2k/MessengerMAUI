@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Messenger.Maui.Features.Auth.RegistrationPage"
+             Title="Регистрация">
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="12" VerticalOptions="Center">
+            <Label Text="Регистрация" FontSize="26" FontAttributes="Bold" />
+            <Label Text="Россия (+7). Тестовый код: 111111." />
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                <Label Text="{Binding CountryCode}" FontSize="18" VerticalOptions="Center" />
+                <Entry Grid.Column="1" Placeholder="999 123-45-67" Keyboard="Telephone" Text="{Binding Phone}" />
+            </Grid>
+            <Button Text="Получить код" Clicked="OnRequestCodeClicked" />
+            <Entry Placeholder="Код" Keyboard="Numeric" Text="{Binding Code}" />
+            <Button Text="Зарегистрироваться" Clicked="OnRegisterClicked" />
+            <Label x:Name="StatusLabel" TextColor="DarkRed" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

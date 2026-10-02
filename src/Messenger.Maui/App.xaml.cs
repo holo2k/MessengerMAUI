@@ -1,16 +1,19 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
+using Messenger.Maui.Features.Auth;
+
 namespace Messenger.Maui;
 
 public partial class App : Application
 {
-	public App()
-	{
-		InitializeComponent();
-	}
+    private readonly LoginPage _loginPage;
 
-	protected override Window CreateWindow(IActivationState? activationState)
-	{
-		return new Window(new AppShell());
-	}
+    public App(LoginPage loginPage)
+    {
+        InitializeComponent();
+        _loginPage = loginPage;
+    }
+
+    protected override Window CreateWindow(IActivationState? activationState) =>
+        new(new NavigationPage(_loginPage));
 }

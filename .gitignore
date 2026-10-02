@@ -1,0 +1,15 @@
+.superpowers/
+Directory.Build.local.props
+
+**/bin/
+**/obj/
+.vs/
+.vscode/
+TestResults/
+*.user
+*.suo
+*.cache
+*.log
+.env
+.env.*
+!.env.example

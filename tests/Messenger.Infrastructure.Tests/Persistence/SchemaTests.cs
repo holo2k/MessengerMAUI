@@ -26,17 +26,15 @@ public sealed class SchemaTests : IAsyncLifetime
         await using (var firstContext = new MessengerDbContext(options))
         {
             await firstContext.Database.MigrateAsync();
-            Assert.Equal(
-                ["00000000000000_Foundation"],
-                await firstContext.Database.GetAppliedMigrationsAsync());
+            var applied = await firstContext.Database.GetAppliedMigrationsAsync();
+            Assert.Contains("00000000000000_Foundation", applied);
         }
 
         await using (var secondContext = new MessengerDbContext(options))
         {
+            var beforeSecondApply = (await secondContext.Database.GetAppliedMigrationsAsync()).ToArray();
             await secondContext.Database.MigrateAsync();
-            Assert.Equal(
-                ["00000000000000_Foundation"],
-                await secondContext.Database.GetAppliedMigrationsAsync());
+            Assert.Equal(beforeSecondApply, await secondContext.Database.GetAppliedMigrationsAsync());
             Assert.Empty(await secondContext.Database.GetPendingMigrationsAsync());
         }
     }

@@ -29,12 +29,15 @@ using Messenger.Application.Accounts;
 using Messenger.Infrastructure.Support;
 using Messenger.Infrastructure.Accounts;
 using Messenger.Api.Hubs;
+using Messenger.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -118,6 +121,27 @@ builder.Services.AddSingleton(serviceProvider =>
 builder.Services.AddHostedService<AccountDeletionWorker>();
 builder.Services.AddHostedService<SmsProviderStartupValidator>();
 builder.Services.AddProblemDetails();
+builder.Services.AddOpenApi();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    foreach (var value in builder.Configuration.GetSection("ReverseProxy:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (IPAddress.TryParse(value, out var address)) options.KnownProxies.Add(address);
+    }
+});
+builder.Services.AddHttpsRedirection(options =>
+{
+    options.HttpsPort = 443;
+    options.RedirectStatusCode = StatusCodes.Status307TemporaryRedirect;
+});
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);
+    options.IncludeSubDomains = true;
+    options.ExcludedHosts.Clear();
+});
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -165,6 +189,13 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+app.UseMiddleware<CorrelationIdMiddleware>();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
@@ -243,9 +274,12 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
     problem.Extensions["code"] = code;
     problem.Extensions["correlationId"] = context.TraceIdentifier;
     context.Response.StatusCode = status;
+    context.Response.Headers[CorrelationIdMiddleware.HeaderName] = context.TraceIdentifier;
     context.Response.ContentType = "application/problem+json";
     await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
 }));
+app.UseMiddleware<ProblemDetailsMiddleware>();
+app.UseMiddleware<SafeRequestLoggingMiddleware>();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -259,6 +293,8 @@ app.MapUploadEndpoints();
 app.MapMusicEndpoints();
 app.MapSupportEndpoints();
 app.MapHub<ChatHub>("/hubs/chat");
+if (app.Environment.IsDevelopment()) app.MapOpenApi();
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }));
 
 app.Run();

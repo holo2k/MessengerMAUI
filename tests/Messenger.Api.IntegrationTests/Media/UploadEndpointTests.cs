@@ -19,7 +19,7 @@ public sealed class UploadEndpointTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("messenger_media_tests").WithUsername("messenger").WithPassword("messenger-tests-only").Build();
-    private readonly MinioContainer _minio = new MinioBuilder("minio/minio:latest")
+    private readonly MinioContainer _minio = new MinioBuilder("minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e")
         .WithUsername("messenger-tests").WithPassword("messenger-tests-only").Build();
 
     public async Task InitializeAsync()

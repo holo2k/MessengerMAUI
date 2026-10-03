@@ -10,8 +10,8 @@ public sealed class MusicViewModelTests
     [Fact]
     public async Task Search_is_debounced_and_library_add_remove_and_declaration_are_forwarded()
     {
-        var api = new FakeMusicApi(); var vm = new MusicViewModel(api, new FakeDownloads(), new FakePlayer(), new ImmediateDelay());
-        vm.SearchText = "пе"; var first = vm.SearchAsync(); vm.SearchText = "песня"; await vm.SearchAsync(); await first;
+        var api = new FakeMusicApi(); var delay = new ControlledDebounceDelay(); var vm = new MusicViewModel(api, new FakeDownloads(), new FakePlayer(), delay);
+        vm.SearchText = "пе"; var first = vm.SearchAsync(); await delay.FirstCallStarted; vm.SearchText = "песня"; await vm.SearchAsync(); await first;
         var track = vm.SearchResults.Single();
         await vm.AddAsync(track); await vm.RemoveAsync(track);
         await vm.UploadAsync(Guid.NewGuid(), "Новая", "Автор", 1000, null, true);
@@ -39,6 +39,20 @@ public sealed class MusicViewModelTests
 
     private static MusicTrackResponse Track() => new(Guid.NewGuid(), "Песня", "Автор", 120000, null, "available");
     private sealed class ImmediateDelay : IAsyncDelay { public Task WaitAsync(TimeSpan delay, CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.CompletedTask; } }
+    private sealed class ControlledDebounceDelay : IAsyncDelay
+    {
+        private readonly TaskCompletionSource _firstCallStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _calls;
+        public Task FirstCallStarted => _firstCallStarted.Task;
+        public async Task WaitAsync(TimeSpan delay, CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _calls) == 1)
+            {
+                _firstCallStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+        }
+    }
     private sealed class FakeMusicApi : IMusicApi
     {
         public int SearchCalls, AddCalls, RemoveCalls, Declarations;

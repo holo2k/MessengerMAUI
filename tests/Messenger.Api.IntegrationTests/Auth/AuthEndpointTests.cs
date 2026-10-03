@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Testcontainers.PostgreSql;
 
 namespace Messenger.Api.IntegrationTests.Auth;
@@ -184,11 +185,20 @@ public sealed class MessengerApiFactory(
     int codePermitLimit = 100,
     string? minioEndpoint = null,
     string? minioAccessKey = null,
-    string? minioSecretKey = null) : WebApplicationFactory<Program>
+    string? minioSecretKey = null,
+    bool skipSmsValidation = false) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(environment);
+        if (skipSmsValidation)
+        {
+            builder.ConfigureServices(services =>
+            {
+                var descriptor = services.FirstOrDefault(x => x.ServiceType == typeof(IHostedService) && x.ImplementationType == typeof(Messenger.Api.Configuration.SmsProviderStartupValidator));
+                if (descriptor is not null) services.Remove(descriptor);
+            });
+        }
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
             new Dictionary<string, string?>
             {

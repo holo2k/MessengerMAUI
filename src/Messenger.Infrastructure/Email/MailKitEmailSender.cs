@@ -12,6 +12,7 @@ public sealed class SmtpOptions
     public string Username { get; init; } = string.Empty;
     public string Password { get; init; } = string.Empty;
     public string FromAddress { get; init; } = string.Empty;
+    public bool UseSsl { get; init; } = true;
 }
 
 public sealed class MailKitEmailSender(SmtpOptions options) : IEmailSender
@@ -38,7 +39,7 @@ public sealed class MailKitEmailSender(SmtpOptions options) : IEmailSender
         };
 
         using var client = new SmtpClient();
-        await client.ConnectAsync(options.Host, options.Port, SecureSocketOptions.SslOnConnect, cancellationToken);
+        await client.ConnectAsync(options.Host, options.Port, options.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.None, cancellationToken);
         await client.AuthenticateAsync(options.Username, options.Password, cancellationToken);
         await client.SendAsync(message, cancellationToken);
         await client.DisconnectAsync(true, cancellationToken);

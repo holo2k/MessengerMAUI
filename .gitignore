@@ -13,3 +13,4 @@ TestResults/
 .env
 .env.*
 !.env.example
+artifacts/

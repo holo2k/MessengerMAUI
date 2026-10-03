@@ -79,14 +79,14 @@ try {
     }
     $device = if ($adbPath) { (& $adbPath devices | Select-Object -Skip 1 | Where-Object { $_ -match "\tdevice$" } | Select-Object -First 1) } else { $null }
     if ($device) {
-        $apk = Get-ChildItem (Join-Path $work 'src/Messenger.Maui/bin/Debug/net10.0-android') -Filter '*-Signed.apk' -Recurse | Select-Object -First 1
-        if (-not $apk) { throw 'Android Debug APK was not produced.' }
+        $apk = Get-ChildItem (Join-Path $work 'src/Messenger.Maui/bin/Release/net10.0-android') -Filter '*-Signed.apk' -Recurse | Select-Object -First 1
+        if (-not $apk) { throw 'Android Release APK was not produced.' }
         & $adbPath install -r $apk.FullName | Out-Host; Assert-NativeSuccess 'ADB install'
         & $adbPath shell monkey -p com.companyname.messenger.maui -c android.intent.category.LAUNCHER 1 | Out-Host; Assert-NativeSuccess 'Android launch smoke'
         Start-Sleep -Seconds 2
         $activities = & $adbPath shell dumpsys activity activities
         Assert-NativeSuccess 'Android activity inspection'
-        if ($activities -notmatch 'com\.companyname\.messenger\.maui/.+MainActivity') { throw 'Messenger MainActivity is not present after launch.' }
+        if (-not ($activities -match 'com\.companyname\.messenger\.maui/.+MainActivity')) { throw 'Messenger MainActivity is not present after launch.' }
     } else {
         Write-Warning 'No running Android emulator/device was found; install/launch smoke remains unverified.'
     }

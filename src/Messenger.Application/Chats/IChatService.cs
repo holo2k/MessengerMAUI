@@ -9,6 +9,7 @@ public interface IChatStore
     Task<Chat?> FindChatAsync(Guid chatId, CancellationToken cancellationToken);
     Task<ChatMember?> FindMemberAsync(Guid chatId, Guid userId, CancellationToken cancellationToken);
     Task<IReadOnlyList<ChatMember>> ListMembersAsync(Guid chatId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Guid>> ListActiveChatIdsAsync(Guid userId, CancellationToken cancellationToken);
     Task<IReadOnlyList<(Chat Chat, ChatMember Member)>> ListChatsAsync(
         Guid userId,
         DateTimeOffset? afterUpdatedAt,

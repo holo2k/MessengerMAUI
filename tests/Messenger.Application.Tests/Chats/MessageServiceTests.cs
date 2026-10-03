@@ -167,6 +167,9 @@ public sealed class MessageServiceTests
             Task.FromResult(Members.SingleOrDefault(member => member.ChatId == chatId && member.UserId == userId));
         public Task<IReadOnlyList<ChatMember>> ListMembersAsync(Guid chatId, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<ChatMember>>(Members.Where(member => member.ChatId == chatId).ToArray());
+        public Task<IReadOnlyList<Guid>> ListActiveChatIdsAsync(Guid userId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<Guid>>(Members.Where(member => member.UserId == userId && member.IsActive)
+                .Select(member => member.ChatId).ToArray());
         public Task<IReadOnlyList<(Chat Chat, ChatMember Member)>> ListChatsAsync(Guid userId, DateTimeOffset? after, Guid? afterId, int take, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<(Chat, ChatMember)>>([]);
         public Task AddDirectAsync(Chat chat, DirectChatPair pair, IReadOnlyCollection<ChatMember> members, CancellationToken ct) => throw new NotSupportedException();

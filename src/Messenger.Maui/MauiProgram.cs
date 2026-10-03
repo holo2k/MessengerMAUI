@@ -2,6 +2,8 @@
 
 using Messenger.Maui.Features.Auth;
 using Messenger.Maui.Services;
+using Messenger.Maui.Features.Chats;
+using Messenger.Maui.Features.Contacts;
 
 namespace Messenger.Maui;
 
@@ -44,6 +46,15 @@ public static class MauiProgram
 		builder.Services.AddTransient<LoginPage>();
 		builder.Services.AddTransient<RegistrationPage>();
 		builder.Services.AddTransient<AppShell>();
+		builder.Services.AddSingleton<IConversationApi, ConversationClient>();
+		builder.Services.AddSingleton<Messenger.Maui.Services.IPhoneDialer, Messenger.Maui.Services.PhoneDialer>();
+		builder.Services.AddSingleton<IChatRealtimeClient, ChatRealtimeClient>();
+		builder.Services.AddSingleton<IChatCursorStore, PreferencesChatCursorStore>();
+		builder.Services.AddTransient<ChatSyncService>();
+		builder.Services.AddTransient<ChatsViewModel>();
+		builder.Services.AddTransient<ContactsViewModel>();
+		builder.Services.AddTransient<ChatsPage>();
+		builder.Services.AddTransient<ContactsPage>();
 
 		return builder.Build();
 	}

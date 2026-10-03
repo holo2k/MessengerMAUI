@@ -2,6 +2,8 @@ using System.Security.Claims;
 using Messenger.Application.Chats;
 using Messenger.Contracts.Messages;
 using Messenger.Domain.Chats;
+using Messenger.Api.Hubs;
+using Messenger.Contracts.Realtime;
 
 namespace Messenger.Api.Endpoints;
 
@@ -31,8 +33,15 @@ public static class MessageEndpoints
             SendMessageRequest request,
             ClaimsPrincipal principal,
             IMessageService service,
-            CancellationToken ct) => Results.Ok(ToResponse(await service.SendAsync(
-                UserId(principal), chatId, request.ClientMessageId, ParseKind(request.Type), request.Body, ct))));
+            IChatEventPublisher publisher,
+            CancellationToken ct) =>
+        {
+            var sent = await service.SendAsync(
+                UserId(principal), chatId, request.ClientMessageId, ParseKind(request.Type), request.Body, ct);
+            await publisher.MessageCreatedAsync(
+                new MessageCreatedEvent(chatId, sent.Message.Id, sent.Message.Sequence), ct);
+            return Results.Ok(ToResponse(sent));
+        });
         chats.MapGet("/{chatId:guid}/messages/search", async (
             Guid chatId,
             string query,

@@ -7,8 +7,8 @@
     Title="Мессенджер">
 
     <TabBar>
-        <ShellContent Title="Чаты" ContentTemplate="{DataTemplate local:MainPage}" Route="Chats" />
-        <ShellContent Title="Контакты" ContentTemplate="{DataTemplate local:MainPage}" Route="Contacts" />
+        <ShellContent x:Name="ChatsTab" Title="Чаты" Route="Chats" />
+        <ShellContent x:Name="ContactsTab" Title="Контакты" Route="Contacts" />
         <ShellContent Title="Музыка" ContentTemplate="{DataTemplate local:MainPage}" Route="Music" />
         <ShellContent Title="Настройки" ContentTemplate="{DataTemplate local:MainPage}" Route="Settings" />
     </TabBar>

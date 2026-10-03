@@ -101,6 +101,10 @@ public sealed class ContactChatServiceTests
         public Task<IReadOnlyList<ChatMember>> ListMembersAsync(Guid chatId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<ChatMember>>(Members.Where(member => member.ChatId == chatId).ToArray());
 
+        public Task<IReadOnlyList<Guid>> ListActiveChatIdsAsync(Guid userId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Guid>>(Members.Where(member => member.UserId == userId && member.IsActive)
+                .Select(member => member.ChatId).ToArray());
+
         public Task<IReadOnlyList<(Chat Chat, ChatMember Member)>> ListChatsAsync(Guid userId, DateTimeOffset? afterUpdatedAt, Guid? afterId, int take, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<(Chat, ChatMember)>>([]);
 

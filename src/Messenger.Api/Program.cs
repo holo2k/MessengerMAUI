@@ -16,6 +16,7 @@ using Messenger.Infrastructure.Security;
 using Messenger.Infrastructure.Users;
 using Messenger.Infrastructure.Social;
 using Messenger.Domain.Chats;
+using Messenger.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -50,6 +51,8 @@ builder.Services.AddScoped<IMessageStore, EfMessageStore>();
 builder.Services.AddScoped<MessageService>();
 builder.Services.AddScoped<IMessageService>(serviceProvider => serviceProvider.GetRequiredService<MessageService>());
 builder.Services.AddScoped<IMessageSearchService>(serviceProvider => serviceProvider.GetRequiredService<MessageService>());
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IChatEventPublisher, SignalRChatEventPublisher>();
 builder.Services.AddSingleton<IFieldCipher>(serviceProvider =>
     new AesGcmFieldCipher(serviceProvider.GetRequiredService<IConfiguration>()
         .GetSection("Encryption").Get<FieldCipherOptions>()
@@ -197,6 +200,7 @@ app.MapContactEndpoints();
 app.MapChatEndpoints();
 app.MapChatFolderEndpoints();
 app.MapMessageEndpoints();
+app.MapHub<ChatHub>("/hubs/chat");
 app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }));
 
 app.Run();

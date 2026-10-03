@@ -62,6 +62,11 @@ public sealed class EfSocialStore(MessengerDbContext dbContext) : IContactStore,
     public async Task<IReadOnlyList<ChatMember>> ListMembersAsync(Guid chatId, CancellationToken cancellationToken) =>
         await dbContext.ChatMembers.Where(member => member.ChatId == chatId).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Guid>> ListActiveChatIdsAsync(Guid userId, CancellationToken cancellationToken) =>
+        await dbContext.ChatMembers.Where(member => member.UserId == userId && member.LeftAt == null)
+            .Join(dbContext.Chats.Where(chat => chat.DeletedAt == null), member => member.ChatId, chat => chat.Id, (_, chat) => chat.Id)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<(Chat Chat, ChatMember Member)>> ListChatsAsync(
         Guid userId,
         DateTimeOffset? afterUpdatedAt,

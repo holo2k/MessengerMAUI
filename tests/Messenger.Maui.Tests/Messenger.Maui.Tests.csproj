@@ -30,6 +30,11 @@
     <Compile Include="..\..\src\Messenger.Maui\Services\AuthSessionHandler.cs" Link="Services\AuthSessionHandler.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\ISecureSessionStore.cs" Link="Services\ISecureSessionStore.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\NavigationService.cs" Link="Services\NavigationService.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\ChatSyncService.cs" Link="Services\ChatSyncService.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\ConversationClient.cs" Link="Services\ConversationClient.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Features\Chats\ChatsViewModel.cs" Link="Features\Chats\ChatsViewModel.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Features\Chats\ChatViewModel.cs" Link="Features\Chats\ChatViewModel.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Features\Contacts\ContactsViewModel.cs" Link="Features\Contacts\ContactsViewModel.cs" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Messenger.Maui.Features.Music.MusicPage" Title="Музыка">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="12" RowSpacing="8">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <Entry Text="{Binding SearchText}" Placeholder="Поиск по библиотеке" />
+            <Button Grid.Column="1" Text="Найти" Clicked="OnSearchClicked" />
+            <Button Grid.Column="2" Text="Загрузить" Clicked="OnUploadClicked" />
+        </Grid>
+        <Label Grid.Row="1" Text="{Binding Status}" TextColor="Gray" />
+        <CollectionView Grid.Row="2" ItemsSource="{Binding SearchResults}" SelectionMode="Single" SelectionChanged="OnTrackSelected">
+            <CollectionView.ItemTemplate><DataTemplate>
+                <Grid ColumnDefinitions="*,Auto,Auto" Padding="6">
+                    <VerticalStackLayout><Label Text="{Binding Title}" FontAttributes="Bold"/><Label Text="{Binding Artist}"/></VerticalStackLayout>
+                    <Button Grid.Column="1" Text="+" Clicked="OnAddClicked" CommandParameter="{Binding .}" />
+                    <Button Grid.Column="2" Text="↓" Clicked="OnDownloadClicked" CommandParameter="{Binding .}" />
+                </Grid>
+            </DataTemplate></CollectionView.ItemTemplate>
+        </CollectionView>
+        <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Padding="8" BackgroundColor="#EEEEEE">
+            <VerticalStackLayout><Label Text="Мини-плеер" FontAttributes="Bold"/><Label Text="{Binding PositionText}"/><ProgressBar Progress="{Binding DownloadProgress}"/></VerticalStackLayout>
+            <Button Grid.Column="1" Text="Пауза / Старт" Clicked="OnPauseClicked" />
+        </Grid>
+    </Grid>
+</ContentPage>

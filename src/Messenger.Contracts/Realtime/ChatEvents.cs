@@ -6,3 +6,4 @@ public sealed record MessageDeletedEvent(Guid ChatId, Guid MessageId, long Seque
 public sealed record ReadPositionChangedEvent(Guid ChatId, Guid UserId, long Sequence);
 public sealed record ChatChangedEvent(Guid ChatId, long Cursor);
 public sealed record MemberChangedEvent(Guid ChatId, Guid UserId, long Cursor);
+public sealed record MusicTrackStatusChangedEvent(Guid TrackId, string Status, string Reason);

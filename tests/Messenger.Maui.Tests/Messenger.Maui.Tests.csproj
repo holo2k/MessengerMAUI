@@ -38,6 +38,8 @@
     <Compile Include="..\..\src\Messenger.Maui\Services\MediaCaptureService.cs" Link="Services\MediaCaptureService.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\UploadClient.cs" Link="Services\UploadClient.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\MediaComposerViewModel.cs" Link="Features\Chats\MediaComposerViewModel.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Features\Music\MusicViewModel.cs" Link="Features\Music\MusicViewModel.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\MusicServices.cs" Link="Services\MusicServices.cs" />
   </ItemGroup>
 
 </Project>

@@ -5,6 +5,7 @@ using Messenger.Maui.Services;
 using Messenger.Maui.Features.Chats;
 using Messenger.Maui.Features.Contacts;
 using Plugin.Maui.Audio;
+using Messenger.Maui.Features.Music;
 
 namespace Messenger.Maui;
 
@@ -51,6 +52,8 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IConversationApi, ConversationClient>();
 		builder.Services.AddSingleton<Messenger.Maui.Services.IPhoneDialer, Messenger.Maui.Services.PhoneDialer>();
 		builder.Services.AddSingleton<IChatRealtimeClient, ChatRealtimeClient>();
+		builder.Services.AddSingleton<IMusicRealtimeClient>(services =>
+			(ChatRealtimeClient)services.GetRequiredService<IChatRealtimeClient>());
 		builder.Services.AddSingleton<IChatCursorStore, PreferencesChatCursorStore>();
 		builder.Services.AddSingleton<IMediaCaptureService, NativeMediaCaptureService>();
 		builder.Services.AddSingleton(services => new UploadClient(
@@ -58,6 +61,14 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IMediaUploader>(services => services.GetRequiredService<UploadClient>());
 		builder.Services.AddSingleton<IAvatarClient>(services => services.GetRequiredService<UploadClient>());
 		builder.Services.AddTransient<MediaComposerViewModel>();
+		builder.Services.AddSingleton<IMusicApi, MusicApiClient>();
+		builder.Services.AddSingleton<IAsyncDelay, AsyncDelay>();
+		builder.Services.AddSingleton<IMusicDownloadService>(services => new MusicDownloadService(
+			services.GetRequiredService<IMusicApi>(), new HttpClient()));
+		builder.Services.AddSingleton<IAudioPlayerService>(services => new AudioPlayerService(
+			services.GetRequiredService<IAudioManager>(), new HttpClient()));
+		builder.Services.AddTransient<MusicViewModel>();
+		builder.Services.AddTransient<MusicPage>();
 		builder.Services.AddTransient<ChatSyncService>();
 		builder.Services.AddTransient<ChatsViewModel>();
 		builder.Services.AddTransient<ContactsViewModel>();

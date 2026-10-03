@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 
 namespace Messenger.Maui.Services;
 
-public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
+public sealed class ChatRealtimeClient : IChatRealtimeClient, IMusicRealtimeClient, IAsyncDisposable
 {
     private readonly HubConnection _connection;
 
@@ -22,6 +22,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
             .Build();
         _connection.On<MessageCreatedEvent>("MessageCreated", message =>
             MessageCreated?.Invoke(message) ?? Task.CompletedTask);
+        _connection.On<MusicTrackStatusChangedEvent>("MusicTrackStatusChanged", message =>
+            TrackStatusChanged?.Invoke(message) ?? Task.CompletedTask);
         _connection.Reconnecting += _ =>
         {
             ConnectionStateChanged?.Invoke(ChatConnectionState.Reconnecting);
@@ -42,6 +44,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IAsyncDisposable
     public event Func<MessageCreatedEvent, Task>? MessageCreated;
     public event Func<Task>? Reconnected;
     public event Action<ChatConnectionState>? ConnectionStateChanged;
+    public event Func<MusicTrackStatusChangedEvent, Task>? TrackStatusChanged;
 
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {

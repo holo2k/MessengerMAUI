@@ -3,6 +3,9 @@ using Messenger.Application.Music;
 using Messenger.Contracts.Media;
 using Messenger.Contracts.Music;
 using Messenger.Domain.Music;
+using Messenger.Api.Hubs;
+using Messenger.Contracts.Realtime;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Messenger.Api.Endpoints;
 
@@ -20,7 +23,13 @@ public static class MusicEndpoints
         music.MapGet("/tracks/{id:guid}/stream", async (Guid id, ClaimsPrincipal p, IMusicService s, CancellationToken ct) => { var value = await s.AuthorizeStreamAsync(UserId(p), id, ct); return Results.Ok(new DownloadAuthorizationResponse(value.Url, value.ExpiresAt)); });
         music.MapGet("/tracks/{id:guid}/download", async (Guid id, ClaimsPrincipal p, IMusicService s, CancellationToken ct) => { var value = await s.AuthorizeStreamAsync(UserId(p), id, ct); return Results.Ok(new DownloadAuthorizationResponse(value.Url, value.ExpiresAt)); });
         music.MapPost("/tracks/{id:guid}/claims", async (Guid id, CopyrightClaimRequest r, ClaimsPrincipal p, IMusicService s, CancellationToken ct) => { await s.SubmitClaimAsync(UserId(p), id, r.Details, ct); return Results.Accepted(); });
-        endpoints.MapPut("/api/admin/music/tracks/{id:guid}", async (Guid id, ModerateTrackRequest r, ClaimsPrincipal p, IMusicModerationService s, CancellationToken ct) => { await s.DecideAsync(UserId(p), id, r.Action, r.Reason, ct); return Results.NoContent(); }).RequireAuthorization();
+        endpoints.MapPut("/api/admin/music/tracks/{id:guid}", async (Guid id, ModerateTrackRequest r, ClaimsPrincipal p, IMusicModerationService s, IHubContext<ChatHub> hub, CancellationToken ct) =>
+        {
+            await s.DecideAsync(UserId(p), id, r.Action, r.Reason, ct);
+            var status = r.Action.Equals("approve", StringComparison.OrdinalIgnoreCase) ? "available" : r.Action.ToLowerInvariant() == "delete" ? "deleted" : "blocked";
+            await hub.Clients.All.SendAsync("MusicTrackStatusChanged", new MusicTrackStatusChangedEvent(id, status, r.Reason), ct);
+            return Results.NoContent();
+        }).RequireAuthorization();
         return endpoints;
     }
     private static MusicTrackResponse ToResponse(MusicTrack x) => new(x.Id, x.Title, x.Artist, x.DurationMs, x.CoverObjectId, x.Status.ToString().ToLowerInvariant());

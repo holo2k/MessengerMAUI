@@ -63,6 +63,13 @@ public sealed class Chat : Entity
         DeletedAt ??= now;
         UpdatedAt = now;
     }
+
+    public long NextMessageSequence(DateTimeOffset now)
+    {
+        CurrentMessageSequence++;
+        UpdatedAt = now;
+        return CurrentMessageSequence;
+    }
 }
 
 public sealed class DirectChatPair

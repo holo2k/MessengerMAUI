@@ -23,6 +23,10 @@ public sealed class MessengerDbContext(DbContextOptions<MessengerDbContext> opti
     public DbSet<ChatMember> ChatMembers => Set<ChatMember>();
     public DbSet<ChatFolder> ChatFolders => Set<ChatFolder>();
     public DbSet<ChatFolderItem> ChatFolderItems => Set<ChatFolderItem>();
+    public DbSet<Message> Messages => Set<Message>();
+    public DbSet<MessageSearchToken> MessageSearchTokens => Set<MessageSearchToken>();
+    public DbSet<HiddenMessage> HiddenMessages => Set<HiddenMessage>();
+    public DbSet<PinnedMessage> PinnedMessages => Set<PinnedMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MessengerDbContext).Assembly);

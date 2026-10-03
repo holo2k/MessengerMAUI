@@ -46,6 +46,10 @@ builder.Services.AddScoped<IChatFolderStore>(serviceProvider => serviceProvider.
 builder.Services.AddScoped<IContactService, ContactService>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<IChatFolderService, ChatFolderService>();
+builder.Services.AddScoped<IMessageStore, EfMessageStore>();
+builder.Services.AddScoped<MessageService>();
+builder.Services.AddScoped<IMessageService>(serviceProvider => serviceProvider.GetRequiredService<MessageService>());
+builder.Services.AddScoped<IMessageSearchService>(serviceProvider => serviceProvider.GetRequiredService<MessageService>());
 builder.Services.AddSingleton<IFieldCipher>(serviceProvider =>
     new AesGcmFieldCipher(serviceProvider.GetRequiredService<IConfiguration>()
         .GetSection("Encryption").Get<FieldCipherOptions>()
@@ -158,6 +162,12 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
             (StatusCodes.Status403Forbidden, "forbidden"),
         ChatRuleException chatRuleException =>
             (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(chatRuleException.Code.ToString())),
+        MessageRuleException { Code: MessageRuleError.NotFound } =>
+            (StatusCodes.Status404NotFound, "message_not_found"),
+        MessageRuleException { Code: MessageRuleError.Forbidden } =>
+            (StatusCodes.Status403Forbidden, "forbidden"),
+        MessageRuleException messageRuleException =>
+            (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(messageRuleException.Code.ToString())),
         DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } } =>
             (StatusCodes.Status409Conflict, "phone_already_registered"),
         IOException =>
@@ -186,6 +196,7 @@ app.MapProfileEndpoints();
 app.MapContactEndpoints();
 app.MapChatEndpoints();
 app.MapChatFolderEndpoints();
+app.MapMessageEndpoints();
 app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }));
 
 app.Run();

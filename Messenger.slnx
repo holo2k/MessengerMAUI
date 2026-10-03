@@ -5,7 +5,9 @@
     <Project Path="src/Messenger.Contracts/Messenger.Contracts.csproj" />
     <Project Path="src/Messenger.Domain/Messenger.Domain.csproj" />
     <Project Path="src/Messenger.Infrastructure/Messenger.Infrastructure.csproj" />
-    <Project Path="src/Messenger.Maui/Messenger.Maui.csproj" />
+    <Project Path="src/Messenger.Maui/Messenger.Maui.csproj">
+      <Deploy Solution="Debug|*" />
+    </Project>
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Messenger.Api.IntegrationTests/Messenger.Api.IntegrationTests.csproj" />
@@ -14,5 +16,9 @@
     <Project Path="tests/Messenger.EndToEndTests/Messenger.EndToEndTests.csproj" />
     <Project Path="tests/Messenger.Infrastructure.Tests/Messenger.Infrastructure.Tests.csproj" />
     <Project Path="tests/Messenger.Maui.Tests/Messenger.Maui.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Элементы решения/">
+    <File Path=".env" />
+    <File Path=".env.example" />
   </Folder>
 </Solution>

@@ -28,22 +28,26 @@ public static class MauiProgram
 		builder.Logging.AddDebug();
 #endif
 
-		var apiBaseAddress = new Uri(
-			DeviceInfo.Platform == DevicePlatform.Android
-				? "https://10.0.2.2:7106/"
-				: "https://localhost:7106/");
+		var endpoints = ApiEndpointOptions.Create(
+			DeviceInfo.Platform == DevicePlatform.Android,
+#if DEBUG
+			isDebug: true);
+#else
+			isDebug: false);
+#endif
+		builder.Services.AddSingleton(endpoints);
 		builder.Services.AddSingleton<ISecureSessionStore, SecureSessionStore>();
 		builder.Services.AddSingleton<INavigationService, NavigationService>();
 		builder.Services.AddSingleton<IAuthApi>(_ => new ApiClient(new HttpClient
 		{
-			BaseAddress = apiBaseAddress
+			BaseAddress = endpoints.ApiBaseAddress
 		}));
 		builder.Services.AddSingleton<AuthSessionHandler>();
 		builder.Services.AddSingleton(serviceProvider =>
 		{
 			var sessionHandler = serviceProvider.GetRequiredService<AuthSessionHandler>();
 			sessionHandler.InnerHandler = new HttpClientHandler();
-			return new HttpClient(sessionHandler) { BaseAddress = apiBaseAddress };
+			return new HttpClient(sessionHandler) { BaseAddress = endpoints.ApiBaseAddress };
 		});
 		builder.Services.AddTransient<LoginViewModel>();
 		builder.Services.AddTransient<RegistrationViewModel>();

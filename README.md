@@ -18,12 +18,15 @@
 Требуются .NET SDK 10.0.401+, workload MAUI/Android, Docker Desktop, Android SDK и JDK 21.
 
 1. Скопируйте `.env.example` в `.env` и замените все значения `replace-with-*`. Каждый криптографический ключ должен быть независимым случайным Base64-значением на 32 байта. SMTP-пароль храните только в `.env` или Secret Manager.
-2. Запустите зависимости: `docker compose up -d postgres minio`.
-3. Примените миграции: `dotnet ef database update --project src/Messenger.Infrastructure --startup-project src/Messenger.Infrastructure`.
-4. Запустите API: `./scripts/run-api.ps1`. Скрипт безопасно импортирует `.env` и согласует ASP.NET connection string/MinIO credentials с Compose; сам `dotnet run` файл `.env` не читает.
-5. Запустите Android: `dotnet build src/Messenger.Maui -f net10.0-android -t:Run`.
+2. Подготовьте зависимости и БД: `./scripts/prepare-dev.ps1`. Скрипт запускает PostgreSQL/MinIO, ждёт healthcheck, загружает параметры именно из `.env` и применяет миграции с коротким таймаутом подключения.
+3. В отдельном PowerShell запустите API: `./scripts/run-api.ps1`.
+4. Ещё в одном PowerShell запустите Android: `./scripts/run-android.ps1`. Скрипт сам найдёт установленный AVD, запустит эмулятор, дождётся полной загрузки и развернёт Debug-приложение. Конкретный AVD можно выбрать через `-AvdName pixel_7_-_api_36_0`.
 
-На Windows AAPT2 не принимает кириллицу в пути. Создайте один раз ASCII junction и выполняйте Android-команды из него:
+Не запускайте для локальной разработки голые команды `dotnet ef database update` и `dotnet build -t:Run`: первая не загружает секреты PostgreSQL из `.env`, а вторая не запускает выключенный эмулятор. Debug Android обращается к API по `http://10.0.2.2:5192`; это разрешено только debug-манифестом. Release остаётся HTTPS-only.
+
+`run-api.ps1` намеренно не завершается, пока работает сервер. Оставьте это окно открытым; строка `Now listening on: http://localhost:5192` означает успешный запуск. Остановка — `Ctrl+C`. В отличие от него, `prepare-dev.ps1` должен завершиться сообщением `Development dependencies and database are ready.`.
+
+На Windows AAPT2 не принимает кириллицу в пути. Текущий каталог `MessengerMAUI` уже содержит только ASCII, поэтому junction не нужен. Если проект позднее будет перемещён в путь с кириллицей, создайте ASCII junction:
 
 ```powershell
 New-Item -ItemType Junction -Path "$env:LOCALAPPDATA\MessengerWorkspace" -Target (Get-Location)

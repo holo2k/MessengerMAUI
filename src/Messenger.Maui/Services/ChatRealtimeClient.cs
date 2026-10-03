@@ -7,13 +7,10 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IMusicRealtimeClie
 {
     private readonly HubConnection _connection;
 
-    public ChatRealtimeClient(ISecureSessionStore sessions)
+    public ChatRealtimeClient(ISecureSessionStore sessions, ApiEndpointOptions endpoints)
     {
-        var baseAddress = DeviceInfo.Platform == DevicePlatform.Android
-            ? "https://10.0.2.2:7106"
-            : "https://localhost:7106";
         _connection = new HubConnectionBuilder()
-            .WithUrl($"{baseAddress}/hubs/chat", options =>
+            .WithUrl(endpoints.ChatHubAddress, options =>
             {
                 options.AccessTokenProvider = async () =>
                     (await sessions.GetAsync())?.Session.AccessToken;

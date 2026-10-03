@@ -23,7 +23,9 @@ public sealed class EfUserSettingsStore(MessengerDbContext dbContext) : IUserSet
             cancellationToken);
 
     public Task<bool> AreContactsAsync(Guid firstUserId, Guid secondUserId, CancellationToken cancellationToken) =>
-        Task.FromResult(false);
+        dbContext.Contacts.AnyAsync(contact =>
+            contact.OwnerUserId == firstUserId && contact.TargetUserId == secondUserId,
+            cancellationToken);
 
     public Task<RefreshSession?> FindOwnedSessionAsync(Guid userId, Guid sessionId, CancellationToken cancellationToken) =>
         dbContext.RefreshSessions.SingleOrDefaultAsync(

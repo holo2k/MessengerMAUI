@@ -5,6 +5,8 @@ using Messenger.Api.Endpoints;
 using Messenger.Application.Identity;
 using Messenger.Application.Security;
 using Messenger.Application.Users;
+using Messenger.Application.Contacts;
+using Messenger.Application.Chats;
 using Messenger.Domain.Common;
 using Messenger.Infrastructure;
 using Messenger.Infrastructure.Identity;
@@ -12,6 +14,8 @@ using Messenger.Infrastructure.Email;
 using Messenger.Infrastructure.Persistence;
 using Messenger.Infrastructure.Security;
 using Messenger.Infrastructure.Users;
+using Messenger.Infrastructure.Social;
+using Messenger.Domain.Chats;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -35,6 +39,13 @@ builder.Services.AddScoped<IUserSettingsStore>(serviceProvider => serviceProvide
 builder.Services.AddScoped<ITwoFactorStore>(serviceProvider => serviceProvider.GetRequiredService<EfUserSettingsStore>());
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<ITwoFactorService, TwoFactorService>();
+builder.Services.AddScoped<EfSocialStore>();
+builder.Services.AddScoped<IContactStore>(serviceProvider => serviceProvider.GetRequiredService<EfSocialStore>());
+builder.Services.AddScoped<IChatStore>(serviceProvider => serviceProvider.GetRequiredService<EfSocialStore>());
+builder.Services.AddScoped<IChatFolderStore>(serviceProvider => serviceProvider.GetRequiredService<EfSocialStore>());
+builder.Services.AddScoped<IContactService, ContactService>();
+builder.Services.AddScoped<IChatService, ChatService>();
+builder.Services.AddScoped<IChatFolderService, ChatFolderService>();
 builder.Services.AddSingleton<IFieldCipher>(serviceProvider =>
     new AesGcmFieldCipher(serviceProvider.GetRequiredService<IConfiguration>()
         .GetSection("Encryption").Get<FieldCipherOptions>()
@@ -135,6 +146,18 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
             (StatusCodes.Status404NotFound, "user_not_found"),
         UserSettingsException userSettingsException =>
             (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(userSettingsException.Code.ToString())),
+        ContactRuleException { Code: ContactRuleError.ContactNotFound or ContactRuleError.UserNotFound } =>
+            (StatusCodes.Status404NotFound, "contact_not_found"),
+        ContactRuleException { Code: ContactRuleError.Duplicate } =>
+            (StatusCodes.Status409Conflict, "duplicate_contact"),
+        ContactRuleException contactRuleException =>
+            (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(contactRuleException.Code.ToString())),
+        ChatRuleException { Code: ChatRuleError.NotFound } =>
+            (StatusCodes.Status404NotFound, "chat_not_found"),
+        ChatRuleException { Code: ChatRuleError.Forbidden } =>
+            (StatusCodes.Status403Forbidden, "forbidden"),
+        ChatRuleException chatRuleException =>
+            (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(chatRuleException.Code.ToString())),
         DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } } =>
             (StatusCodes.Status409Conflict, "phone_already_registered"),
         IOException =>
@@ -160,6 +183,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapProfileEndpoints();
+app.MapContactEndpoints();
+app.MapChatEndpoints();
+app.MapChatFolderEndpoints();
 app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }));
 
 app.Run();

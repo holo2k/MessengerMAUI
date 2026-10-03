@@ -181,7 +181,10 @@ public sealed class MessengerApiFactory(
     string connectionString,
     string environment,
     int challengePermitLimit,
-    int codePermitLimit = 100) : WebApplicationFactory<Program>
+    int codePermitLimit = 100,
+    string? minioEndpoint = null,
+    string? minioAccessKey = null,
+    string? minioSecretKey = null) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -200,6 +203,10 @@ public sealed class MessengerApiFactory(
                 ["Sms:Provider"] = "Development",
                 ["RateLimits:ChallengePermitLimit"] = challengePermitLimit.ToString(),
                 ["RateLimits:CodePermitLimit"] = codePermitLimit.ToString()
+                , ["Minio:Endpoint"] = minioEndpoint ?? "http://localhost:9000"
+                , ["Minio:AccessKey"] = minioAccessKey ?? "messenger"
+                , ["Minio:SecretKey"] = minioSecretKey ?? "messenger-local-only"
+                , ["Minio:Bucket"] = $"messenger-tests-{Guid.NewGuid():N}"
             }));
     }
 }

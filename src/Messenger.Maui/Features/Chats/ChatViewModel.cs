@@ -1,11 +1,12 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Messenger.Contracts.Messages;
+using Messenger.Contracts.Media;
 using Messenger.Maui.Services;
 
 namespace Messenger.Maui.Features.Chats;
 
-public sealed class ChatViewModel(Guid chatId, IConversationApi api) : ObservableObject
+public sealed class ChatViewModel(Guid chatId, IConversationApi api, MediaComposerViewModel? media = null) : ObservableObject
 {
     private string _composerText = string.Empty;
     private string _connectionStatus = "Не подключено";
@@ -13,7 +14,9 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api) : Observabl
     public ObservableCollection<MessageResponse> Messages { get; } = [];
     public ObservableCollection<MessageResponse> SearchResults { get; } = [];
     public ObservableCollection<MessageResponse> Pins { get; } = [];
+    public ObservableCollection<StoredObjectResponse> SharedMedia { get; } = [];
     public Guid ChatId => chatId;
+    public MediaComposerViewModel? Media { get; } = media;
     public string ComposerText { get => _composerText; set => SetProperty(ref _composerText, value); }
     public string ConnectionStatus { get => _connectionStatus; private set => SetProperty(ref _connectionStatus, value); }
 
@@ -37,13 +40,25 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api) : Observabl
     public async Task SendAsync(CancellationToken cancellationToken = default)
     {
         var body = ComposerText;
-        if (string.IsNullOrWhiteSpace(body))
+        var uploaded = Media?.Attachments
+            .Where(item => item.State == UploadItemState.Uploaded && item.StoredObject is not null)
+            .ToArray() ?? [];
+        if (string.IsNullOrWhiteSpace(body) && uploaded.Length == 0)
         {
             return;
         }
-        var sent = await api.SendAsync(chatId, Guid.NewGuid(), body, cancellationToken);
+        var sent = uploaded.Length == 0
+            ? await api.SendAsync(chatId, Guid.NewGuid(), body, cancellationToken)
+            : await api.SendWithAttachmentsAsync(
+                chatId,
+                Guid.NewGuid(),
+                uploaded[0].Selection.Kind.ToString().ToLowerInvariant(),
+                string.IsNullOrWhiteSpace(body) ? null : body,
+                uploaded.Select(item => item.StoredObject!.Id).ToArray(),
+                cancellationToken);
         Messages.Add(sent);
         ComposerText = string.Empty;
+        Media?.Attachments.Clear();
     }
 
     public async Task SearchAsync(string query, CancellationToken cancellationToken = default)
@@ -61,6 +76,15 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api) : Observabl
         foreach (var message in await api.GetPinsAsync(chatId, cancellationToken))
         {
             Pins.Add(message);
+        }
+    }
+
+    public async Task LoadMediaAsync(CancellationToken cancellationToken = default)
+    {
+        SharedMedia.Clear();
+        foreach (var value in await api.GetChatMediaAsync(chatId, cancellationToken))
+        {
+            SharedMedia.Add(value);
         }
     }
 

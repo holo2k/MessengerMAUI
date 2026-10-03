@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using Messenger.Contracts.Chats;
 using Messenger.Contracts.Contacts;
 using Messenger.Contracts.Messages;
+using Messenger.Contracts.Media;
 
 namespace Messenger.Maui.Services;
 
@@ -19,8 +20,10 @@ public interface IConversationApi
     Task<ChatResponse> CreateDirectAsync(Guid userId, CancellationToken ct = default);
     Task<ChatResponse> CreateGroupAsync(string title, IReadOnlyList<Guid> userIds, CancellationToken ct = default);
     Task<MessageResponse> SendAsync(Guid chatId, Guid clientId, string body, CancellationToken ct = default);
+    Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default);
     Task<IReadOnlyList<MessageResponse>> SearchAsync(Guid chatId, string query, CancellationToken ct = default);
     Task<IReadOnlyList<MessageResponse>> GetPinsAsync(Guid chatId, CancellationToken ct = default);
+    Task<IReadOnlyList<StoredObjectResponse>> GetChatMediaAsync(Guid chatId, CancellationToken ct = default);
     Task<ContactResponse> UpdateContactAsync(Guid contactId, UpdateContactRequest request, CancellationToken ct = default);
 }
 
@@ -69,12 +72,18 @@ public sealed class ConversationClient(HttpClient httpClient) : IConversationApi
     public Task<MessageResponse> SendAsync(Guid chatId, Guid clientId, string body, CancellationToken ct = default) =>
         PostAsync<MessageResponse>($"api/chats/{chatId}/messages", new SendMessageRequest(clientId, "text", body), ct);
 
+    public Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default) =>
+        PostAsync<MessageResponse>($"api/chats/{chatId}/messages", new SendMessageRequest(clientId, type, body, objectIds), ct);
+
     public async Task<IReadOnlyList<MessageResponse>> SearchAsync(Guid chatId, string query, CancellationToken ct = default) =>
         (await httpClient.GetFromJsonAsync<MessagePageResponse>(
             $"api/chats/{chatId}/messages/search?query={Uri.EscapeDataString(query)}", ct))?.Items ?? [];
 
     public async Task<IReadOnlyList<MessageResponse>> GetPinsAsync(Guid chatId, CancellationToken ct = default) =>
         (await httpClient.GetFromJsonAsync<MessagePageResponse>($"api/chats/{chatId}/pins", ct))?.Items ?? [];
+
+    public async Task<IReadOnlyList<StoredObjectResponse>> GetChatMediaAsync(Guid chatId, CancellationToken ct = default) =>
+        await httpClient.GetFromJsonAsync<List<StoredObjectResponse>>($"api/chats/{chatId}/media", ct) ?? [];
 
     public async Task<ContactResponse> UpdateContactAsync(
         Guid contactId,

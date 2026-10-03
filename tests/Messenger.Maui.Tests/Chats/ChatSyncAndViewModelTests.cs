@@ -2,6 +2,7 @@ using Messenger.Contracts.Chats;
 using Messenger.Contracts.Contacts;
 using Messenger.Contracts.Messages;
 using Messenger.Contracts.Realtime;
+using Messenger.Contracts.Media;
 using Messenger.Maui.Features.Chats;
 using Messenger.Maui.Features.Contacts;
 using Messenger.Maui.Services;
@@ -177,8 +178,11 @@ public sealed class ChatSyncAndViewModelTests
         public Task<ChatResponse> CreateGroupAsync(string title, IReadOnlyList<Guid> userIds, CancellationToken ct = default) { GroupCreates++; return Task.FromResult(Chat(Guid.NewGuid())); }
         public Task<MessageResponse> SendAsync(Guid chatId, Guid clientId, string body, CancellationToken ct = default) =>
             SendFailure is null ? Task.FromResult(Message(chatId, 1)) : Task.FromException<MessageResponse>(SendFailure);
+        public Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default) =>
+            SendFailure is null ? Task.FromResult(Message(chatId, 1)) : Task.FromException<MessageResponse>(SendFailure);
         public Task<IReadOnlyList<MessageResponse>> SearchAsync(Guid chatId, string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MessageResponse>>(SearchResults);
         public Task<IReadOnlyList<MessageResponse>> GetPinsAsync(Guid chatId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MessageResponse>>(PinResults);
+        public Task<IReadOnlyList<StoredObjectResponse>> GetChatMediaAsync(Guid chatId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<StoredObjectResponse>>([]);
         public Task<ContactResponse> UpdateContactAsync(Guid contactId, UpdateContactRequest request, CancellationToken ct = default)
         {
             LastContactUpdate = request;

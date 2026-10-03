@@ -4,6 +4,7 @@ using Messenger.Application.Identity;
 using Messenger.Contracts.Users;
 using Messenger.Domain.Identity;
 using Messenger.Domain.Users;
+using Messenger.Application.Media;
 
 namespace Messenger.Api.Endpoints;
 
@@ -23,9 +24,15 @@ public static class ProfileEndpoints
             return Results.NoContent();
         });
 
-        group.MapPost("/avatar", async (AvatarRequest request, ClaimsPrincipal principal, IProfileService service, CancellationToken ct) =>
+        group.MapPost("/avatar", async (AvatarRequest request, ClaimsPrincipal principal, IProfileService service, IUploadService uploads, CancellationToken ct) =>
         {
-            await service.UpdateAvatarAsync(UserId(principal), request.ObjectId, ct);
+            var userId = UserId(principal);
+            if (!Guid.TryParse(request.ObjectId, out var objectId))
+            {
+                throw new MediaException(MediaError.NotFound);
+            }
+            await uploads.ValidateOwnedAvailableAsync(userId, objectId, ct);
+            await service.UpdateAvatarAsync(userId, objectId.ToString(), ct);
             return Results.NoContent();
         });
         group.MapDelete("/avatar", async (ClaimsPrincipal principal, IProfileService service, CancellationToken ct) =>

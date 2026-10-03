@@ -3,6 +3,7 @@ using Messenger.Domain.Identity;
 using Messenger.Domain.Users;
 using Messenger.Domain.Contacts;
 using Messenger.Domain.Chats;
+using Messenger.Domain.Media;
 
 namespace Messenger.Infrastructure.Persistence;
 
@@ -27,6 +28,9 @@ public sealed class MessengerDbContext(DbContextOptions<MessengerDbContext> opti
     public DbSet<MessageSearchToken> MessageSearchTokens => Set<MessageSearchToken>();
     public DbSet<HiddenMessage> HiddenMessages => Set<HiddenMessage>();
     public DbSet<PinnedMessage> PinnedMessages => Set<PinnedMessage>();
+    public DbSet<UploadSession> UploadSessions => Set<UploadSession>();
+    public DbSet<StoredObject> StoredObjects => Set<StoredObject>();
+    public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MessengerDbContext).Assembly);

@@ -4,6 +4,7 @@ using Messenger.Maui.Features.Auth;
 using Messenger.Maui.Services;
 using Messenger.Maui.Features.Chats;
 using Messenger.Maui.Features.Contacts;
+using Plugin.Maui.Audio;
 
 namespace Messenger.Maui;
 
@@ -14,6 +15,7 @@ public static class MauiProgram
 		var builder = MauiApp.CreateBuilder();
 		builder
 			.UseMauiApp<App>()
+			.AddAudio()
 			.ConfigureFonts(fonts =>
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -50,6 +52,12 @@ public static class MauiProgram
 		builder.Services.AddSingleton<Messenger.Maui.Services.IPhoneDialer, Messenger.Maui.Services.PhoneDialer>();
 		builder.Services.AddSingleton<IChatRealtimeClient, ChatRealtimeClient>();
 		builder.Services.AddSingleton<IChatCursorStore, PreferencesChatCursorStore>();
+		builder.Services.AddSingleton<IMediaCaptureService, NativeMediaCaptureService>();
+		builder.Services.AddSingleton(services => new UploadClient(
+			services.GetRequiredService<HttpClient>(), new HttpClient()));
+		builder.Services.AddSingleton<IMediaUploader>(services => services.GetRequiredService<UploadClient>());
+		builder.Services.AddSingleton<IAvatarClient>(services => services.GetRequiredService<UploadClient>());
+		builder.Services.AddTransient<MediaComposerViewModel>();
 		builder.Services.AddTransient<ChatSyncService>();
 		builder.Services.AddTransient<ChatsViewModel>();
 		builder.Services.AddTransient<ContactsViewModel>();

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Messenger.Application.Chats;
 using Messenger.Contracts.Chats;
 using Messenger.Domain.Chats;
+using Messenger.Application.Media;
 
 namespace Messenger.Api.Endpoints;
 
@@ -50,9 +51,19 @@ public static class ChatEndpoints
             UpdateGroupChatRequest request,
             ClaimsPrincipal principal,
             IChatService service,
+            IUploadService uploads,
             CancellationToken ct) =>
         {
-            await service.UpdateGroupAsync(UserId(principal), chatId, request.Title, request.AvatarObjectId, ct);
+            var actorId = UserId(principal);
+            if (request.AvatarObjectId is not null)
+            {
+                if (!Guid.TryParse(request.AvatarObjectId, out var objectId))
+                {
+                    throw new MediaException(MediaError.NotFound);
+                }
+                await uploads.ValidateOwnedAvailableAsync(actorId, objectId, ct);
+            }
+            await service.UpdateGroupAsync(actorId, chatId, request.Title, request.AvatarObjectId, ct);
             return Results.NoContent();
         });
         chats.MapDelete("/{chatId:guid}", async (

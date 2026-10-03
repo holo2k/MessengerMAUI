@@ -1,6 +1,6 @@
 namespace Messenger.Contracts.Messages;
 
-public sealed record SendMessageRequest(Guid ClientMessageId, string Type, string? Body);
+public sealed record SendMessageRequest(Guid ClientMessageId, string Type, string? Body, IReadOnlyList<Guid>? AttachmentObjectIds = null);
 public sealed record EditMessageRequest(string Body);
 public sealed record MessageResponse(
     Guid Id,

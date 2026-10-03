@@ -15,6 +15,9 @@ using Messenger.Infrastructure.Persistence;
 using Messenger.Infrastructure.Security;
 using Messenger.Infrastructure.Users;
 using Messenger.Infrastructure.Social;
+using Messenger.Application.Media;
+using Messenger.Infrastructure.Media;
+using Messenger.Api.Background;
 using Messenger.Domain.Chats;
 using Messenger.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -51,6 +54,14 @@ builder.Services.AddScoped<IMessageStore, EfMessageStore>();
 builder.Services.AddScoped<MessageService>();
 builder.Services.AddScoped<IMessageService>(serviceProvider => serviceProvider.GetRequiredService<MessageService>());
 builder.Services.AddScoped<IMessageSearchService>(serviceProvider => serviceProvider.GetRequiredService<MessageService>());
+builder.Services.AddScoped<IUploadStore, EfUploadStore>();
+builder.Services.AddScoped<IUploadService, UploadService>();
+builder.Services.AddSingleton<IFileInspector, FileSignatureInspector>();
+builder.Services.AddSingleton<IMalwareScanner>(new DevelopmentMalwareScanner(builder.Environment.IsDevelopment()));
+builder.Services.AddSingleton<IObjectStore>(serviceProvider => new MinioObjectStore(
+    serviceProvider.GetRequiredService<IConfiguration>().GetSection("Minio").Get<MinioOptions>()
+    ?? throw new InvalidOperationException("Minio configuration is required.")));
+builder.Services.AddHostedService<UploadCleanupWorker>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IChatEventPublisher, SignalRChatEventPublisher>();
 builder.Services.AddSingleton<IFieldCipher>(serviceProvider =>
@@ -171,6 +182,12 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
             (StatusCodes.Status403Forbidden, "forbidden"),
         MessageRuleException messageRuleException =>
             (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(messageRuleException.Code.ToString())),
+        MediaException { Code: MediaError.NotFound } =>
+            (StatusCodes.Status404NotFound, "media_not_found"),
+        MediaException { Code: MediaError.Forbidden } =>
+            (StatusCodes.Status403Forbidden, "forbidden"),
+        MediaException mediaException =>
+            (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(mediaException.Code.ToString())),
         DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } } =>
             (StatusCodes.Status409Conflict, "phone_already_registered"),
         IOException =>
@@ -200,6 +217,7 @@ app.MapContactEndpoints();
 app.MapChatEndpoints();
 app.MapChatFolderEndpoints();
 app.MapMessageEndpoints();
+app.MapUploadEndpoints();
 app.MapHub<ChatHub>("/hubs/chat");
 app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }));
 

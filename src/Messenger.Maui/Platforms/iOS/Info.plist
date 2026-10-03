@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Камера нужна для отправки фото и видео в чат.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Микрофон нужен для записи аудиосообщений.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Доступ к медиатеке нужен для выбора вложений.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIDeviceFamily</key>

@@ -35,6 +35,9 @@
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\ChatsViewModel.cs" Link="Features\Chats\ChatsViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\ChatViewModel.cs" Link="Features\Chats\ChatViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Contacts\ContactsViewModel.cs" Link="Features\Contacts\ContactsViewModel.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\MediaCaptureService.cs" Link="Services\MediaCaptureService.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\UploadClient.cs" Link="Services\UploadClient.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Features\Chats\MediaComposerViewModel.cs" Link="Features\Chats\MediaComposerViewModel.cs" />
   </ItemGroup>
 
 </Project>

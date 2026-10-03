@@ -56,7 +56,8 @@ public partial class ChatsPage : ContentPage
         }
         ChatsList.SelectedItems.Clear();
         var sync = _services.GetRequiredService<ChatSyncService>();
-        await Navigation.PushAsync(new ChatPage(new ChatViewModel(item.Chat.Id, _api), sync));
+        var media = _services.GetRequiredService<MediaComposerViewModel>();
+        await Navigation.PushAsync(new ChatPage(new ChatViewModel(item.Chat.Id, _api, media), sync));
     }
 
     private async void OnArchiveClicked(object? sender, EventArgs e) => await ApplyBulkAsync(ChatBulkAction.Archive);

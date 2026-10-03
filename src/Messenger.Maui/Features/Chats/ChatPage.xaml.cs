@@ -32,6 +32,23 @@ public partial class ChatPage : ContentPage
     private async void OnSearchClicked(object? sender, EventArgs e) =>
         await RunAsync(ct => _viewModel.SearchAsync(SearchEntry.Text ?? string.Empty, ct));
     private async void OnPinsClicked(object? sender, EventArgs e) => await RunAsync(_viewModel.LoadPinsAsync);
+    private async void OnMediaClicked(object? sender, EventArgs e)
+    {
+        await RunAsync(_viewModel.LoadMediaAsync);
+        await DisplayAlertAsync("Медиа", $"Файлов в чате: {_viewModel.SharedMedia.Count}", "OK");
+    }
+    private async void OnFileClicked(object? sender, EventArgs e) => await RunMediaAsync(MediaKind.File);
+    private async void OnPhotoClicked(object? sender, EventArgs e) => await RunMediaAsync(MediaKind.Photo);
+    private async void OnVideoClicked(object? sender, EventArgs e) => await RunMediaAsync(MediaKind.Video);
+    private async void OnAudioClicked(object? sender, EventArgs e) => await RunMediaAsync(MediaKind.Audio);
+
+    private async Task RunMediaAsync(MediaKind kind)
+    {
+        if (_viewModel.Media is not null)
+        {
+            await RunAsync(ct => _viewModel.Media.AddAsync(kind, ct));
+        }
+    }
 
     private async Task RunAsync(Func<CancellationToken, Task> action)
     {

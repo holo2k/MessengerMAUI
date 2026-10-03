@@ -4,6 +4,7 @@ using Messenger.Contracts.Messages;
 using Messenger.Domain.Chats;
 using Messenger.Api.Hubs;
 using Messenger.Contracts.Realtime;
+using Messenger.Application.Media;
 
 namespace Messenger.Api.Endpoints;
 
@@ -34,10 +35,16 @@ public static class MessageEndpoints
             ClaimsPrincipal principal,
             IMessageService service,
             IChatEventPublisher publisher,
+            IUploadService attachments,
             CancellationToken ct) =>
         {
             var sent = await service.SendAsync(
                 UserId(principal), chatId, request.ClientMessageId, ParseKind(request.Type), request.Body, ct);
+            if (request.AttachmentObjectIds is { Count: > 0 })
+            {
+                await attachments.AttachToMessageAsync(
+                    UserId(principal), sent.Message.Id, request.AttachmentObjectIds, ct);
+            }
             await publisher.MessageCreatedAsync(
                 new MessageCreatedEvent(chatId, sent.Message.Id, sent.Message.Sequence), ct);
             return Results.Ok(ToResponse(sent));
@@ -57,16 +64,6 @@ public static class MessageEndpoints
             IMessageService service,
             CancellationToken ct) => Results.Ok(new MessagePageResponse(
                 (await service.ListPinsAsync(UserId(principal), chatId, ct)).Select(ToResponse).ToArray(), null)));
-        chats.MapGet("/{chatId:guid}/media", async (
-            Guid chatId,
-            ClaimsPrincipal principal,
-            IChatService service,
-            CancellationToken ct) =>
-        {
-            await service.GetAsync(UserId(principal), chatId, ct);
-            return Results.Ok(Array.Empty<object>());
-        });
-
         var messages = endpoints.MapGroup("/api/messages").RequireAuthorization();
         messages.MapPatch("/{messageId:guid}", async (
             Guid messageId,

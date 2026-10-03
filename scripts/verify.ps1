@@ -56,6 +56,12 @@ try {
     Assert-NativeSuccess 'API Release build'
     dotnet build src/Messenger.Maui/Messenger.Maui.csproj -f net10.0-android -c Debug --no-restore
     Assert-NativeSuccess 'Android Debug build'
+    $debugManifest = Join-Path $work 'src/Messenger.Maui/obj/Debug/net10.0-android/android/AndroidManifest.xml'
+    if (-not (Test-Path -LiteralPath $debugManifest)) { throw 'Merged Android Debug manifest was not produced.' }
+    $debugManifestText = [IO.File]::ReadAllText($debugManifest)
+    if ($debugManifestText -notmatch 'usesCleartextTraffic="true"' -or $debugManifestText -notmatch 'networkSecurityConfig="@xml/network_security_config"') {
+        throw 'Android Debug transport policy does not permit the emulator host configured by network_security_config.'
+    }
     dotnet build src/Messenger.Maui/Messenger.Maui.csproj -f net10.0-android -c Release --no-restore
     Assert-NativeSuccess 'Android Release build'
     $releaseManifest = Join-Path $work 'src/Messenger.Maui/obj/Release/net10.0-android/android/AndroidManifest.xml'

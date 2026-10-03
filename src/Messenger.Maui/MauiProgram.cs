@@ -6,6 +6,7 @@ using Messenger.Maui.Features.Chats;
 using Messenger.Maui.Features.Contacts;
 using Plugin.Maui.Audio;
 using Messenger.Maui.Features.Music;
+using Messenger.Maui.Features.Settings;
 
 namespace Messenger.Maui;
 
@@ -69,6 +70,9 @@ public static class MauiProgram
 			services.GetRequiredService<IAudioManager>(), new HttpClient()));
 		builder.Services.AddTransient<MusicViewModel>();
 		builder.Services.AddTransient<MusicPage>();
+		builder.Services.AddSingleton<ISettingsApi, SettingsApi>();
+		builder.Services.AddTransient<SettingsViewModel>();
+		builder.Services.AddTransient<SettingsPage>();
 		builder.Services.AddTransient<ChatSyncService>();
 		builder.Services.AddTransient<ChatsViewModel>();
 		builder.Services.AddTransient<ContactsViewModel>();

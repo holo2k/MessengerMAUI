@@ -22,6 +22,12 @@ using Messenger.Application.Music;
 using Messenger.Infrastructure.Music;
 using Messenger.Domain.Music;
 using Messenger.Domain.Chats;
+using Messenger.Domain.Support;
+using Messenger.Domain.Accounts;
+using Messenger.Application.Support;
+using Messenger.Application.Accounts;
+using Messenger.Infrastructure.Support;
+using Messenger.Infrastructure.Accounts;
 using Messenger.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
@@ -102,6 +108,14 @@ builder.Services.AddSingleton(serviceProvider =>
 builder.Services.AddSingleton(serviceProvider =>
     serviceProvider.GetRequiredService<IConfiguration>().GetSection("TwoFactor").Get<TwoFactorOptions>()
     ?? new TwoFactorOptions());
+builder.Services.AddScoped<ISupportStore, EfSupportStore>();
+builder.Services.AddScoped<ISupportService, SupportService>();
+builder.Services.AddScoped<IAccountDeletionStore, EfAccountDeletionStore>();
+builder.Services.AddScoped<IAccountDeletionService, AccountDeletionService>();
+builder.Services.AddSingleton(serviceProvider =>
+    serviceProvider.GetRequiredService<IConfiguration>().GetSection("SupportAdmin").Get<SupportAdminOptions>()
+    ?? new SupportAdminOptions());
+builder.Services.AddHostedService<AccountDeletionWorker>();
 builder.Services.AddHostedService<SmsProviderStartupValidator>();
 builder.Services.AddProblemDetails();
 
@@ -202,6 +216,16 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
             (StatusCodes.Status403Forbidden, "forbidden"),
         MusicRuleException musicException =>
             (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(musicException.Code.ToString())),
+        SupportRuleException { Code: SupportRuleError.NotFound } =>
+            (StatusCodes.Status404NotFound, "support_ticket_not_found"),
+        SupportRuleException { Code: SupportRuleError.Forbidden } =>
+            (StatusCodes.Status403Forbidden, "forbidden"),
+        SupportRuleException supportException =>
+            (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(supportException.Code.ToString())),
+        AccountDeletionException { Code: AccountDeletionError.NotFound } =>
+            (StatusCodes.Status404NotFound, "deletion_request_not_found"),
+        AccountDeletionException deletionException =>
+            (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(deletionException.Code.ToString())),
         DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } } =>
             (StatusCodes.Status409Conflict, "phone_already_registered"),
         IOException =>
@@ -233,6 +257,7 @@ app.MapChatFolderEndpoints();
 app.MapMessageEndpoints();
 app.MapUploadEndpoints();
 app.MapMusicEndpoints();
+app.MapSupportEndpoints();
 app.MapHub<ChatHub>("/hubs/chat");
 app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }));
 

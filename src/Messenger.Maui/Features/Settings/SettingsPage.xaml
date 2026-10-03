@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Messenger.Maui.Features.Settings.SettingsPage" Title="Настройки">
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="10">
+            <Label Text="Профиль" FontSize="22" FontAttributes="Bold" />
+            <Button Text="Загрузить фото" Clicked="OnAvatarClicked" />
+            <Entry Text="{Binding FirstName}" Placeholder="Имя" />
+            <Entry Text="{Binding LastName}" Placeholder="Фамилия" />
+            <Entry Text="{Binding Username}" Placeholder="Юзернейм (необязательно)" />
+            <Editor Text="{Binding Bio}" Placeholder="Био" AutoSize="TextChanges" />
+            <Button Text="Сохранить профиль" Clicked="OnSaveProfileClicked" />
+
+            <Label Text="Номер телефона" FontAttributes="Bold" />
+            <Entry Text="{Binding Phone}" Keyboard="Telephone" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                <Button Text="Запросить код" Clicked="OnBeginPhoneClicked" />
+                <Button Grid.Column="1" Text="Подтвердить" Clicked="OnConfirmPhoneClicked" />
+            </Grid>
+
+            <Label Text="Приватность" FontSize="20" FontAttributes="Bold" />
+            <Label Text="Кто видит телефон" /><Picker x:Name="PhonePrivacyPicker" SelectedItem="{Binding PhonePrivacy}" />
+            <Label Text="Кто видит фото" /><Picker x:Name="AvatarPrivacyPicker" SelectedItem="{Binding AvatarPrivacy}" />
+            <Label Text="Кто видит последний вход" /><Picker x:Name="LastSeenPrivacyPicker" SelectedItem="{Binding LastSeenPrivacy}" />
+            <Button Text="Сохранить приватность" Clicked="OnSavePrivacyClicked" />
+
+            <Label Text="Двухфакторная аутентификация" FontSize="20" FontAttributes="Bold" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8"><Entry x:Name="EmailEntry" Placeholder="Почта" Keyboard="Email"/><Button Grid.Column="1" Text="Отправить код" Clicked="OnBeginTwoFactorClicked"/></Grid>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8"><Entry x:Name="EmailCodeEntry" Placeholder="Код из письма" Keyboard="Numeric"/><Button Grid.Column="1" Text="Включить" Clicked="OnConfirmTwoFactorClicked"/></Grid>
+            <Button Text="Отключить 2FA" Clicked="OnDisableTwoFactorClicked" />
+
+            <Label Text="Активные сессии" FontSize="20" FontAttributes="Bold" />
+            <CollectionView ItemsSource="{Binding Sessions}" HeightRequest="160">
+                <CollectionView.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" Padding="4"><VerticalStackLayout><Label Text="{Binding DeviceLabel}"/><Label Text="{Binding ExpiresAt, StringFormat='до {0:g}'}" FontSize="12"/></VerticalStackLayout><Button Grid.Column="1" Text="Завершить" Clicked="OnRevokeSessionClicked" CommandParameter="{Binding .}"/></Grid></DataTemplate></CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <Label Text="Поддержка" FontSize="20" FontAttributes="Bold" />
+            <Button Text="Написать в поддержку" Clicked="OnSupportClicked" />
+            <CollectionView ItemsSource="{Binding Tickets}" HeightRequest="120"><CollectionView.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" Padding="4"><Label Text="{Binding Subject}"/><Label Grid.Column="1" Text="{Binding Status}"/></Grid></DataTemplate></CollectionView.ItemTemplate></CollectionView>
+
+            <Label Text="Удаление аккаунта" FontSize="20" FontAttributes="Bold" TextColor="DarkRed" />
+            <Label Text="После запроса все сессии будут завершены. Через 30 дней профиль будет обезличен; запрос можно отменить до этой даты." />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8"><Button Text="Удалить аккаунт" BackgroundColor="DarkRed" TextColor="White" Clicked="OnDeleteClicked"/><Button Grid.Column="1" Text="Отменить удаление" Clicked="OnCancelDeletionClicked"/></Grid>
+            <Label Text="{Binding Status}" TextColor="Gray" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -14,5 +14,8 @@ public partial class AppShell : Shell
 		MusicTab.ContentTemplate = new DataTemplate(() =>
 			Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
 				.GetRequiredService<Features.Music.MusicPage>(services));
+		SettingsTab.ContentTemplate = new DataTemplate(() =>
+			Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+				.GetRequiredService<Features.Settings.SettingsPage>(services));
 	}
 }

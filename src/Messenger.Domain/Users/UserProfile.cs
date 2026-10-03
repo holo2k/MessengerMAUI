@@ -33,4 +33,15 @@ public sealed class UserProfile : Entity
     }
 
     public void SetAvatar(string? objectId) => AvatarObjectId = objectId;
+
+    public void Anonymize()
+    {
+        FirstName = "Удалённый";
+        LastName = "пользователь";
+        Username = null;
+        NormalizedUsername = null;
+        Bio = null;
+        AvatarObjectId = null;
+        LastSeenAt = null;
+    }
 }

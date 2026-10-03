@@ -47,4 +47,10 @@ public sealed class User : Entity
         PhoneKeyVersion = keyVersion;
         PhoneBlindIndex = blindIndex;
     }
+
+    public void Deactivate(DateTimeOffset now)
+    {
+        DeactivatedAt ??= now;
+        PhoneBlindIndex = $"deleted:{Id:N}";
+    }
 }

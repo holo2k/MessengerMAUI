@@ -5,6 +5,8 @@ using Messenger.Domain.Contacts;
 using Messenger.Domain.Chats;
 using Messenger.Domain.Media;
 using Messenger.Domain.Music;
+using Messenger.Domain.Support;
+using Messenger.Domain.Accounts;
 
 namespace Messenger.Infrastructure.Persistence;
 
@@ -37,6 +39,9 @@ public sealed class MessengerDbContext(DbContextOptions<MessengerDbContext> opti
     public DbSet<UserMusicTrack> UserMusicTracks => Set<UserMusicTrack>();
     public DbSet<CopyrightClaim> CopyrightClaims => Set<CopyrightClaim>();
     public DbSet<ModerationAction> ModerationActions => Set<ModerationAction>();
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
+    public DbSet<AccountDeletionRequest> AccountDeletionRequests => Set<AccountDeletionRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MessengerDbContext).Assembly);

@@ -18,6 +18,9 @@ using Messenger.Infrastructure.Social;
 using Messenger.Application.Media;
 using Messenger.Infrastructure.Media;
 using Messenger.Api.Background;
+using Messenger.Application.Music;
+using Messenger.Infrastructure.Music;
+using Messenger.Domain.Music;
 using Messenger.Domain.Chats;
 using Messenger.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -62,6 +65,11 @@ builder.Services.AddSingleton<IObjectStore>(serviceProvider => new MinioObjectSt
     serviceProvider.GetRequiredService<IConfiguration>().GetSection("Minio").Get<MinioOptions>()
     ?? throw new InvalidOperationException("Minio configuration is required.")));
 builder.Services.AddHostedService<UploadCleanupWorker>();
+builder.Services.AddScoped<IMusicStore, EfMusicStore>();
+builder.Services.AddScoped<IMusicService, MusicService>();
+builder.Services.AddScoped<IMusicModerationService, MusicModerationService>();
+builder.Services.AddSingleton(serviceProvider =>
+    serviceProvider.GetRequiredService<IConfiguration>().GetSection("MusicAdmin").Get<MusicAdminOptions>() ?? new MusicAdminOptions());
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IChatEventPublisher, SignalRChatEventPublisher>();
 builder.Services.AddSingleton<IFieldCipher>(serviceProvider =>
@@ -188,6 +196,12 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
             (StatusCodes.Status403Forbidden, "forbidden"),
         MediaException mediaException =>
             (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(mediaException.Code.ToString())),
+        MusicRuleException { Code: MusicRuleError.NotFound } =>
+            (StatusCodes.Status404NotFound, "track_not_found"),
+        MusicRuleException { Code: MusicRuleError.Forbidden } =>
+            (StatusCodes.Status403Forbidden, "forbidden"),
+        MusicRuleException musicException =>
+            (StatusCodes.Status422UnprocessableEntity, ToSnakeCase(musicException.Code.ToString())),
         DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } } =>
             (StatusCodes.Status409Conflict, "phone_already_registered"),
         IOException =>
@@ -218,6 +232,7 @@ app.MapChatEndpoints();
 app.MapChatFolderEndpoints();
 app.MapMessageEndpoints();
 app.MapUploadEndpoints();
+app.MapMusicEndpoints();
 app.MapHub<ChatHub>("/hubs/chat");
 app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }));
 

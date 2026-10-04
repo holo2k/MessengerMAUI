@@ -70,8 +70,16 @@ public sealed class MessageEndpointTests : IAsyncLifetime
             firstClient.PostAsJsonAsync($"/api/chats/{chat.Id}/messages", request),
             secondClient.PostAsJsonAsync($"/api/chats/{chat.Id}/messages", request));
 
-        Assert.Equal(1, responses.Count(response => response.IsSuccessStatusCode));
-        Assert.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Conflict));
+        Assert.All(responses, response => Assert.True(
+            response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.Conflict,
+            $"Unexpected status: {response.StatusCode}"));
+        Assert.Contains(responses, response => response.IsSuccessStatusCode);
+        var successfulMessages = new List<MessageResponse>();
+        foreach (var response in responses.Where(response => response.IsSuccessStatusCode))
+        {
+            successfulMessages.Add((await response.Content.ReadFromJsonAsync<MessageResponse>())!);
+        }
+        Assert.Single(successfulMessages.Select(message => message.Id).Distinct());
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<MessengerDbContext>();
         Assert.Equal(1, await db.Messages.CountAsync(message => message.SenderUserId == sender.UserId &&

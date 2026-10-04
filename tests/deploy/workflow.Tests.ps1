@@ -11,12 +11,12 @@ foreach ($path in @($ciPath, $deployPath, $packagePath)) {
 }
 
 $ci = Get-Content -Raw $ciPath
-foreach ($required in @('pull_request:', 'push:', 'test-all.ps1', 'actions/checkout@v4', 'actions/setup-dotnet@v4', 'contents: read')) {
+foreach ($required in @('pull_request:', 'push:', 'test-all.ps1', 'actions/checkout@v4', 'actions/setup-dotnet@v4', 'contents: read', 'docker build --tag messenger-minio:RELEASE.2025-10-15T17-29-55Z')) {
     if (-not $ci.Contains($required, [StringComparison]::Ordinal)) { throw "CI workflow is missing: $required" }
 }
 
 $deploy = Get-Content -Raw $deployPath
-foreach ($required in @('workflow_dispatch:', 'branches: [main]', 'concurrency:', 'test-all.ps1', 'package-linux-release.ps1', 'DEPLOY_SSH_KEY', 'DEPLOY_HOST_KEY', 'known_hosts', 'messenger-deploy', 'curl --fail')) {
+foreach ($required in @('workflow_dispatch:', 'branches: [main]', 'concurrency:', 'test-all.ps1', 'package-linux-release.ps1', 'DEPLOY_SSH_KEY', 'DEPLOY_HOST_KEY', 'known_hosts', 'messenger-deploy', 'curl --fail', 'docker build --tag messenger-minio:RELEASE.2025-10-15T17-29-55Z')) {
     if (-not $deploy.Contains($required, [StringComparison]::Ordinal)) { throw "Deployment workflow is missing: $required" }
 }
 foreach ($forbidden in @('StrictHostKeyChecking=no', 'root@', 'password')) {

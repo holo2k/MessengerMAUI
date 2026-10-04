@@ -9,13 +9,15 @@ permissions:
 
 jobs:
   test:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - name: Build pinned MinIO test image
+        run: docker build --tag messenger-minio:RELEASE.2025-10-15T17-29-55Z --file deploy/Dockerfile.minio deploy
       - name: Run complete test suite
         shell: pwsh
         run: ./scripts/test-all.ps1 -Configuration Release

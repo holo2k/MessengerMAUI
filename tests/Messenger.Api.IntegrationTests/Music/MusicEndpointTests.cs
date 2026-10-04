@@ -19,7 +19,7 @@ public sealed class MusicEndpointTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("messenger_music_tests").WithUsername("messenger").WithPassword("messenger-tests-only").Build();
-    private readonly MinioContainer _minio = new MinioBuilder("minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e")
+    private readonly MinioContainer _minio = new MinioBuilder("messenger-minio:RELEASE.2025-10-15T17-29-55Z")
         .WithUsername("messenger-tests").WithPassword("messenger-tests-only").Build();
     public async Task InitializeAsync() => await Task.WhenAll(_postgres.StartAsync(), _minio.StartAsync());
     public async Task DisposeAsync() { await _minio.DisposeAsync(); await _postgres.DisposeAsync(); }

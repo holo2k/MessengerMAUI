@@ -133,6 +133,34 @@ public sealed class HardeningTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Swagger_explains_music_moderation_action_and_reason_values()
+    {
+        await using var factory = new MessengerApiFactory(_postgres.GetConnectionString(), "Development", 100);
+        var client = factory.CreateClient();
+        using var response = await client.GetAsync("/swagger/v1/swagger.json");
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStreamAsync());
+
+        var description = document.RootElement.GetProperty("paths")
+            .GetProperty("/api/admin/music/tracks/{id}")
+            .GetProperty("put");
+
+        var descriptionText = description.GetProperty("description").GetString();
+        Assert.Contains("approve", descriptionText, StringComparison.Ordinal);
+        Assert.Contains("block", descriptionText, StringComparison.Ordinal);
+        Assert.Contains("delete", descriptionText, StringComparison.Ordinal);
+        Assert.Contains("reason", descriptionText, StringComparison.OrdinalIgnoreCase);
+
+        var examples = description.GetProperty("requestBody").GetProperty("content")
+            .GetProperty("application/json").GetProperty("examples");
+        foreach (var action in new[] { "approve", "block", "delete" })
+        {
+            Assert.Equal(action, examples.GetProperty(action).GetProperty("value").GetProperty("action").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(examples.GetProperty(action).GetProperty("value").GetProperty("reason").GetString()));
+        }
+    }
+
+    [Fact]
     public void Sensitive_values_are_redacted_before_logging()
     {
         var text = SensitiveDataLoggingFilter.Redact("Authorization: Bearer abc accessToken=secret refreshToken=hidden password=hunter2");

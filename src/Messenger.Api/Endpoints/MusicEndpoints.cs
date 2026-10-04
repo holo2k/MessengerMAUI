@@ -29,7 +29,7 @@ public static class MusicEndpoints
             var status = r.Action.Equals("approve", StringComparison.OrdinalIgnoreCase) ? "available" : r.Action.ToLowerInvariant() == "delete" ? "deleted" : "blocked";
             await hub.Clients.All.SendAsync("MusicTrackStatusChanged", new MusicTrackStatusChangedEvent(id, status, r.Reason), ct);
             return Results.NoContent();
-        }).RequireAuthorization().Document("ModerateMusicTrack", "Провести модерацию трека", "Административно одобряет, блокирует или удаляет трек и публикует событие SignalR.", "Администрирование музыки");
+        }).RequireAuthorization().Document("ModerateMusicTrack", "Провести модерацию трека", "Административная модерация трека. Поле action: approve — одобрить и опубликовать, block — заблокировать, delete — удалить. Поле reason: понятная текстовая причина решения для журнала аудита. Готовые варианты тела запроса доступны в списке Examples.", "Администрирование музыки");
         return endpoints;
     }
     private static MusicTrackResponse ToResponse(MusicTrack x) => new(x.Id, x.Title, x.Artist, x.DurationMs, x.CoverObjectId, x.Status.ToString().ToLowerInvariant());

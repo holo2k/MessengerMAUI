@@ -30,6 +30,7 @@ using Messenger.Infrastructure.Support;
 using Messenger.Infrastructure.Accounts;
 using Messenger.Api.Hubs;
 using Messenger.Api.Middleware;
+using Messenger.Api.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -140,6 +141,7 @@ builder.Services.AddSwaggerGen(options =>
         In = Microsoft.OpenApi.ParameterLocation.Header,
         Description = "JWT access token. Enter the token without the Bearer prefix."
     });
+    options.OperationFilter<MusicModerationOperationFilter>();
 });
 builder.Services.AddCors(options =>
 {

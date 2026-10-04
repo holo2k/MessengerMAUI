@@ -26,10 +26,14 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IMusicRealtimeClie
             ConnectionStateChanged?.Invoke(ChatConnectionState.Reconnecting);
             return Task.CompletedTask;
         };
-        _connection.Reconnected += _ =>
+        _connection.Reconnected += async _ =>
         {
+            await _connection.InvokeAsync("Ready");
             ConnectionStateChanged?.Invoke(ChatConnectionState.Connected);
-            return Reconnected?.Invoke() ?? Task.CompletedTask;
+            if (Reconnected is not null)
+            {
+                await Reconnected.Invoke();
+            }
         };
         _connection.Closed += _ =>
         {
@@ -53,6 +57,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IMusicRealtimeClie
         try
         {
             await _connection.StartAsync(cancellationToken);
+            await _connection.InvokeAsync("Ready", cancellationToken);
             ConnectionStateChanged?.Invoke(ChatConnectionState.Connected);
         }
         catch

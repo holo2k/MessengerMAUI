@@ -43,6 +43,8 @@ public sealed class SignalRTests : IAsyncLifetime
         outsiderConnection.On<MessageCreatedEvent>("MessageCreated", value => outsiderEvents.Writer.TryWrite(value));
         await recipientConnection.StartAsync();
         await outsiderConnection.StartAsync();
+        await recipientConnection.InvokeAsync("Ready");
+        await outsiderConnection.InvokeAsync("Ready");
 
         var sent = await PostAsync<MessageResponse>(client, $"/api/chats/{chat.Id}/messages",
             new SendMessageRequest(Guid.NewGuid(), "text", "Realtime"));

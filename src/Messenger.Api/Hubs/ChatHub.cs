@@ -8,6 +8,8 @@ namespace Messenger.Api.Hubs;
 [Authorize]
 public sealed class ChatHub(IChatStore chats) : Hub
 {
+    public Task Ready() => Task.CompletedTask;
+
     public override async Task OnConnectedAsync()
     {
         var userId = Guid.Parse(Context.User?.FindFirstValue(ClaimTypes.NameIdentifier)

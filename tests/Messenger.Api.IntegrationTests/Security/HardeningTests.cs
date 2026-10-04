@@ -86,6 +86,25 @@ public sealed class HardeningTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Swagger_ui_and_document_are_exposed_only_in_development()
+    {
+        await using var developmentFactory = new MessengerApiFactory(_postgres.GetConnectionString(), "Development", 100);
+        var development = developmentFactory.CreateClient();
+        using var ui = await development.GetAsync("/swagger/index.html");
+        ui.EnsureSuccessStatusCode();
+        Assert.Equal("text/html", ui.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("Swagger UI", await ui.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        using var document = await development.GetAsync("/swagger/v1/swagger.json");
+        document.EnsureSuccessStatusCode();
+        Assert.Equal("application/json", document.Content.Headers.ContentType?.MediaType);
+
+        await using var productionFactory = new MessengerApiFactory(_postgres.GetConnectionString(), "Production", 100, skipSmsValidation: true);
+        var production = productionFactory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        Assert.Equal(HttpStatusCode.NotFound, (await production.GetAsync("/swagger/index.html")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await production.GetAsync("/swagger/v1/swagger.json")).StatusCode);
+    }
+
+    [Fact]
     public void Sensitive_values_are_redacted_before_logging()
     {
         var text = SensitiveDataLoggingFilter.Redact("Authorization: Bearer abc accessToken=secret refreshToken=hidden password=hunter2");

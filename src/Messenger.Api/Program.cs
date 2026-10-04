@@ -122,6 +122,20 @@ builder.Services.AddHostedService<AccountDeletionWorker>();
 builder.Services.AddHostedService<SmsProviderStartupValidator>();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new() { Title = "Messenger API", Version = "v1" });
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.ParameterLocation.Header,
+        Description = "JWT access token. Enter the token without the Bearer prefix."
+    });
+});
 builder.Services.AddCors(options =>
 {
     var settings = builder.Configuration.GetSection(CorsSettings.SectionName).Get<CorsSettings>() ?? new CorsSettings();
@@ -303,7 +317,12 @@ app.MapUploadEndpoints();
 app.MapMusicEndpoints();
 app.MapSupportEndpoints();
 app.MapHub<ChatHub>("/hubs/chat");
-if (app.Environment.IsDevelopment()) app.MapOpenApi();
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }));
 

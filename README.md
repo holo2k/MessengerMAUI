@@ -40,3 +40,7 @@ Set-Location "$env:LOCALAPPDATA\MessengerWorkspace"
 Из PowerShell выполните `./scripts/verify.ps1`. Скрипт проверяет форматирование, restore, все тесты, API, Android, миграции, здоровье Compose и возможные секреты. iOS собирается только на macOS — см. [docs/IOS-BUILD.md](docs/IOS-BUILD.md).
 
 Подробности: [API](docs/API.md), [безопасность](docs/SECURITY.md), [музыка и права](docs/MUSIC-COPYRIGHT.md).
+
+## Development deployment
+
+Ubuntu-конфигурация находится в `deploy/`: Caddy публикует API и Swagger по HTTPS, ASP.NET работает как systemd-сервис, а PostgreSQL и MinIO доступны только через loopback. Первый запуск выполняется `bootstrap-ubuntu.sh`, последующие SHA-релизы устанавливаются скриптом `messenger-deploy`. Секреты создаются непосредственно на сервере по шаблонам `messenger.env.example` и `infrastructure.env.example` и никогда не добавляются в Git.

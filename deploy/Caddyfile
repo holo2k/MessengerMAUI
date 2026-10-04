@@ -1,0 +1,24 @@
+{
+	email admin@projectdomain.ru
+}
+
+(messenger_api) {
+	encode zstd gzip
+
+	@private_objects path /messenger-private /messenger-private/*
+	handle @private_objects {
+		reverse_proxy 127.0.0.1:9000
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:5192
+	}
+}
+
+api.projectdomain.ru {
+	import messenger_api
+}
+
+185-56-162-174.sslip.io {
+	import messenger_api
+}

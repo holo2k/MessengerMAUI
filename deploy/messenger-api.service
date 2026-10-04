@@ -1,0 +1,29 @@
+[Unit]
+Description=Messenger Development API
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=messenger-api
+Group=messenger
+WorkingDirectory=/opt/messenger/current/api
+EnvironmentFile=/etc/messenger/messenger.env
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5192
+ExecStart=/opt/messenger/current/api/Messenger.Api
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

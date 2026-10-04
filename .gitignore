@@ -14,3 +14,5 @@ TestResults/
 .env.*
 !.env.example
 artifacts/
+deploy/*.env
+deploy/*.tar.gz

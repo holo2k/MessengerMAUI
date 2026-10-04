@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Run complete test suite
+        shell: pwsh
+        run: ./scripts/test-all.ps1 -Configuration Release
+      - name: Validate deployment assets
+        shell: pwsh
+        run: |
+          ./tests/deploy/deploy-assets.Tests.ps1
+          ./tests/deploy/workflow.Tests.ps1

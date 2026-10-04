@@ -34,10 +34,11 @@ cleanup_staging() { [[ ! -e "${staging_dir}" ]] || rm -rf -- "${staging_dir}"; }
 trap cleanup_staging EXIT
 tar -xzf "${archive}" -C "${staging_dir}" --no-same-owner --no-same-permissions
 
-if [[ ! -x "${staging_dir}/api/Messenger.Api" || ! -x "${staging_dir}/efbundle" ]]; then
-  echo "Release must contain executable api/Messenger.Api and efbundle." >&2
+if [[ ! -f "${staging_dir}/api/Messenger.Api" || ! -f "${staging_dir}/efbundle" ]]; then
+  echo "Release must contain api/Messenger.Api and efbundle." >&2
   exit 3
 fi
+chmod 0750 "${staging_dir}/api/Messenger.Api" "${staging_dir}/efbundle"
 chown -R root:messenger "${staging_dir}"
 chmod -R o-rwx "${staging_dir}"
 chmod -R g+rX "${staging_dir}"

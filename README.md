@@ -44,3 +44,5 @@ Set-Location "$env:LOCALAPPDATA\MessengerWorkspace"
 ## Development deployment
 
 Ubuntu-конфигурация находится в `deploy/`: Caddy публикует API и Swagger по HTTPS, ASP.NET работает как systemd-сервис, а PostgreSQL и MinIO доступны только через loopback. Первый запуск выполняется `bootstrap-ubuntu.sh`, последующие SHA-релизы устанавливаются скриптом `messenger-deploy`. Секреты создаются непосредственно на сервере по шаблонам `messenger.env.example` и `infrastructure.env.example` и никогда не добавляются в Git.
+
+GitHub Actions запускает полную проверку изменений, а push в `main` дополнительно собирает self-contained Linux-релиз, EF migration bundle и устанавливает SHA-релиз через пользователя `messenger-deploy`. Репозиторию нужны secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` и `DEPLOY_HOST_KEY`.

@@ -28,7 +28,7 @@ public static class MessageEndpoints
             return Results.Ok(new MessagePageResponse(
                 page.Select(ToResponse).ToArray(),
                 rows.Count > requested ? page[^1].Message.Sequence.ToString() : null));
-        });
+        }).Document("ListMessages", "Получить сообщения", "Возвращает страницу сообщений выбранного чата по курсору.", "Сообщения");
         chats.MapPost("/{chatId:guid}/messages", async (
             Guid chatId,
             SendMessageRequest request,
@@ -48,7 +48,7 @@ public static class MessageEndpoints
             await publisher.MessageCreatedAsync(
                 new MessageCreatedEvent(chatId, sent.Message.Id, sent.Message.Sequence), ct);
             return Results.Ok(ToResponse(sent));
-        });
+        }).Document("SendMessage", "Отправить сообщение", "Создаёт сообщение, прикрепляет загруженные объекты и публикует событие SignalR.", "Сообщения");
         chats.MapGet("/{chatId:guid}/messages/search", async (
             Guid chatId,
             string query,
@@ -57,13 +57,15 @@ public static class MessageEndpoints
             IMessageSearchService service,
             CancellationToken ct) => Results.Ok(new MessagePageResponse(
                 (await service.SearchAsync(UserId(principal), chatId, query, limit ?? 50, ct))
-                    .Select(ToResponse).ToArray(), null)));
+                    .Select(ToResponse).ToArray(), null)))
+            .Document("SearchMessages", "Найти сообщения", "Ищет сообщения по тексту внутри выбранного чата.", "Сообщения");
         chats.MapGet("/{chatId:guid}/pins", async (
             Guid chatId,
             ClaimsPrincipal principal,
             IMessageService service,
             CancellationToken ct) => Results.Ok(new MessagePageResponse(
-                (await service.ListPinsAsync(UserId(principal), chatId, ct)).Select(ToResponse).ToArray(), null)));
+                (await service.ListPinsAsync(UserId(principal), chatId, ct)).Select(ToResponse).ToArray(), null)))
+            .Document("ListPinnedMessages", "Получить закреплённые сообщения", "Возвращает закреплённые сообщения выбранного чата.", "Сообщения");
         var messages = endpoints.MapGroup("/api/messages").RequireAuthorization();
         messages.MapPatch("/{messageId:guid}", async (
             Guid messageId,
@@ -71,7 +73,8 @@ public static class MessageEndpoints
             ClaimsPrincipal principal,
             IMessageService service,
             CancellationToken ct) => Results.Ok(ToResponse(
-                await service.EditAsync(UserId(principal), messageId, request.Body, ct))));
+                await service.EditAsync(UserId(principal), messageId, request.Body, ct))))
+            .Document("EditMessage", "Изменить сообщение", "Редактирует текст сообщения при наличии прав автора.", "Сообщения");
         messages.MapDelete("/{messageId:guid}", async (
             Guid messageId,
             bool globally,
@@ -81,7 +84,7 @@ public static class MessageEndpoints
         {
             await service.DeleteAsync(UserId(principal), messageId, globally, ct);
             return Results.NoContent();
-        });
+        }).Document("DeleteMessage", "Удалить сообщение", "Удаляет сообщение локально либо для всех участников при наличии прав.", "Сообщения");
         messages.MapPut("/{messageId:guid}/pin", async (
             Guid messageId,
             ClaimsPrincipal principal,
@@ -90,7 +93,7 @@ public static class MessageEndpoints
         {
             await service.PinAsync(UserId(principal), messageId, ct);
             return Results.NoContent();
-        });
+        }).Document("PinMessage", "Закрепить сообщение", "Закрепляет сообщение в соответствующем чате.", "Сообщения");
         messages.MapDelete("/{messageId:guid}/pin", async (
             Guid messageId,
             ClaimsPrincipal principal,
@@ -99,7 +102,7 @@ public static class MessageEndpoints
         {
             await service.UnpinAsync(UserId(principal), messageId, ct);
             return Results.NoContent();
-        });
+        }).Document("UnpinMessage", "Открепить сообщение", "Снимает закрепление выбранного сообщения.", "Сообщения");
         return endpoints;
     }
 

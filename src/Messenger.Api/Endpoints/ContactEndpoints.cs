@@ -19,7 +19,7 @@ public static class ContactEndpoints
         {
             var page = await service.ListAsync(UserId(principal), cursor, limit ?? 50, ct);
             return Results.Ok(new ContactPageResponse(page.Items.Select(ToResponse).ToArray(), page.NextCursor));
-        });
+        }).Document("ListContacts", "Получить контакты", "Возвращает страницу контактов текущего пользователя. Требуется Bearer JWT.", "Контакты");
         contacts.MapPost("/", async (
             CreateContactRequest request,
             ClaimsPrincipal principal,
@@ -31,14 +31,15 @@ public static class ContactEndpoints
                 ownerId, request.TargetUserId, request.LocalFirstName, request.LocalLastName, ct);
             var view = new ContactView(contact, await service.GetUserAsync(ownerId, request.TargetUserId, ct));
             return Results.Created($"/api/contacts/{contact.Id}", ToResponse(view));
-        });
+        }).Document("CreateContact", "Добавить контакт", "Добавляет пользователя в контакты и сохраняет локальное отображаемое имя.", "Контакты");
         contacts.MapPatch("/{contactId:guid}", async (
             Guid contactId,
             UpdateContactRequest request,
             ClaimsPrincipal principal,
             IContactService service,
             CancellationToken ct) => Results.Ok(ToResponse(await service.UpdateAsync(
-                UserId(principal), contactId, request.LocalFirstName, request.LocalLastName, request.IsMuted, ct))));
+                UserId(principal), contactId, request.LocalFirstName, request.LocalLastName, request.IsMuted, ct))))
+            .Document("UpdateContact", "Изменить контакт", "Обновляет локальное имя и признак заглушения контакта.", "Контакты");
         contacts.MapDelete("/{contactId:guid}", async (
             Guid contactId,
             ClaimsPrincipal principal,
@@ -47,7 +48,7 @@ public static class ContactEndpoints
         {
             await service.DeleteAsync(UserId(principal), contactId, ct);
             return Results.NoContent();
-        });
+        }).Document("DeleteContact", "Удалить контакт", "Удаляет контакт только из адресной книги текущего пользователя.", "Контакты");
 
         var users = endpoints.MapGroup("/api/users").RequireAuthorization();
         users.MapGet("/search", async (
@@ -55,13 +56,15 @@ public static class ContactEndpoints
             ClaimsPrincipal principal,
             IContactService service,
             CancellationToken ct) => Results.Ok(new UserSearchPageResponse(
-                (await service.SearchUsersAsync(UserId(principal), query, ct)).Select(ToSearchResponse).ToArray())));
+                (await service.SearchUsersAsync(UserId(principal), query, ct)).Select(ToSearchResponse).ToArray())))
+            .Document("SearchUsers", "Найти пользователей", "Ищет доступных пользователей по номеру телефона или username.", "Пользователи");
         users.MapGet("/{userId:guid}", async (
             Guid userId,
             ClaimsPrincipal principal,
             IContactService service,
             CancellationToken ct) => Results.Ok(ToSearchResponse(
-                await service.GetUserAsync(UserId(principal), userId, ct))));
+                await service.GetUserAsync(UserId(principal), userId, ct))))
+            .Document("GetVisibleUser", "Открыть профиль пользователя", "Возвращает поля профиля, видимые текущему пользователю с учётом приватности.", "Пользователи");
         return endpoints;
     }
 

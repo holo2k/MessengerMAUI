@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Messenger.Api.IntegrationTests.Auth;
 using Messenger.Api.Middleware;
 using Messenger.Contracts.Auth;
@@ -105,6 +106,33 @@ public sealed class HardeningTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Swagger_operations_have_names_summaries_descriptions_and_tags()
+    {
+        await using var factory = new MessengerApiFactory(_postgres.GetConnectionString(), "Development", 100);
+        var client = factory.CreateClient();
+        using var response = await client.GetAsync("/swagger/v1/swagger.json");
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStreamAsync());
+
+        var missing = new List<string>();
+        foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject()
+                     .Where(path => path.Name == "/" || path.Name == "/health" || path.Name.StartsWith("/api/", StringComparison.Ordinal)))
+        {
+            foreach (var operation in path.Value.EnumerateObject().Where(value => value.Name is "get" or "post" or "put" or "patch" or "delete"))
+            {
+                var value = operation.Value;
+                if (!HasText(value, "operationId") || !HasText(value, "summary") || !HasText(value, "description") ||
+                    !value.TryGetProperty("tags", out var tags) || tags.ValueKind != JsonValueKind.Array || tags.GetArrayLength() == 0)
+                {
+                    missing.Add($"{operation.Name.ToUpperInvariant()} {path.Name}");
+                }
+            }
+        }
+
+        Assert.Empty(missing);
+    }
+
+    [Fact]
     public void Sensitive_values_are_redacted_before_logging()
     {
         var text = SensitiveDataLoggingFilter.Redact("Authorization: Bearer abc accessToken=secret refreshToken=hidden password=hunter2");
@@ -140,6 +168,10 @@ public sealed class HardeningTests : IAsyncLifetime
         request.Headers.Add("Access-Control-Request-Headers", "content-type");
         return request;
     }
+    private static bool HasText(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) &&
+        property.ValueKind == JsonValueKind.String &&
+        !string.IsNullOrWhiteSpace(property.GetString());
     private sealed class RecordingLoggerProvider : ILoggerProvider, ILogger
     {
         public System.Collections.Concurrent.ConcurrentQueue<string> Messages { get; } = [];

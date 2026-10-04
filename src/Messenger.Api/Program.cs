@@ -125,7 +125,12 @@ builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new() { Title = "Messenger API", Version = "v1" });
+    options.SwaggerDoc("v1", new()
+    {
+        Title = "Messenger API",
+        Version = "v1",
+        Description = "Development API мессенджера. Bearer JWT защищает пользовательские методы. SignalR подключается отдельно по /hubs/chat и публикует события сообщений и музыки."
+    });
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -323,8 +328,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
-app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }));
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
+    .Document("Health", "Проверить состояние API", "Возвращает успешный ответ, если процесс Messenger API готов принимать запросы.", "Диагностика");
+app.MapGet("/", () => Results.Ok(new { service = "messenger-api" }))
+    .Document("ServiceInfo", "Получить сведения о сервисе", "Возвращает идентификатор запущенного Messenger API.", "Диагностика");
 
 app.Run();
 

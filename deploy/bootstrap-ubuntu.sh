@@ -26,6 +26,7 @@ chown messenger-deploy:messenger-deploy /var/lib/messenger-deploy/incoming
 chmod 0750 /var/lib/messenger-deploy/incoming
 
 install -m 0644 "${script_dir}/docker-compose.infrastructure.yml" /opt/messenger/infrastructure/compose.yml
+install -m 0644 "${script_dir}/Dockerfile.minio" /opt/messenger/infrastructure/Dockerfile.minio
 install -m 0644 "${script_dir}/Caddyfile" /etc/caddy/Caddyfile
 install -m 0644 "${script_dir}/messenger-api.service" /etc/systemd/system/messenger-api.service
 install -m 0755 "${script_dir}/deploy-release.sh" /usr/local/sbin/messenger-deploy
@@ -46,6 +47,14 @@ chown root:root /opt/messenger/infrastructure/.env
 chmod 0600 /opt/messenger/infrastructure/.env
 
 systemctl enable --now docker
+minio_image="messenger-minio:RELEASE.2025-10-15T17-29-55Z"
+if ! docker image inspect "${minio_image}" >/dev/null 2>&1; then
+  if [[ -f /opt/messenger/infrastructure/minio-image.tar.gz ]]; then
+    docker load --input /opt/messenger/infrastructure/minio-image.tar.gz
+  else
+    docker build --tag "${minio_image}" --file /opt/messenger/infrastructure/Dockerfile.minio /opt/messenger/infrastructure
+  fi
+fi
 docker compose --env-file /opt/messenger/infrastructure/.env -f /opt/messenger/infrastructure/compose.yml up -d
 systemctl daemon-reload
 systemctl enable messenger-api.service

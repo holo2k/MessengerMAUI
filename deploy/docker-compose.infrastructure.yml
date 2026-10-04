@@ -20,7 +20,7 @@ services:
       start_period: 10s
 
   minio:
-    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    image: messenger-minio:RELEASE.2025-10-15T17-29-55Z
     command: server /data --console-address ":9001"
     restart: unless-stopped
     environment:

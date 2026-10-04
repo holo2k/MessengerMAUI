@@ -45,4 +45,6 @@ Set-Location "$env:LOCALAPPDATA\MessengerWorkspace"
 
 Ubuntu-конфигурация находится в `deploy/`: Caddy публикует API и Swagger по HTTPS, ASP.NET работает как systemd-сервис, а PostgreSQL и MinIO доступны только через loopback. Первый запуск выполняется `bootstrap-ubuntu.sh`, последующие SHA-релизы устанавливаются скриптом `messenger-deploy`. Секреты создаются непосредственно на сервере по шаблонам `messenger.env.example` и `infrastructure.env.example` и никогда не добавляются в Git.
 
+MinIO Community больше не публикует готовые официальные образы. `deploy/Dockerfile.minio` воспроизводимо собирает образ из последнего security-релиза официального исходного кода; bootstrap также умеет загрузить заранее собранный `/opt/messenger/infrastructure/minio-image.tar.gz`.
+
 GitHub Actions запускает полную проверку изменений, а push в `main` дополнительно собирает self-contained Linux-релиз, EF migration bundle и устанавливает SHA-релиз через пользователя `messenger-deploy`. Репозиторию нужны secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` и `DEPLOY_HOST_KEY`.

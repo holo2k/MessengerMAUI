@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $required = @(
     'deploy/docker-compose.infrastructure.yml',
+    'deploy/Dockerfile.minio',
     'deploy/Caddyfile',
     'deploy/messenger-api.service',
     'deploy/messenger-deploy.sudoers',
@@ -28,6 +29,9 @@ foreach ($serviceName in @('postgres', 'minio')) {
     foreach ($port in @($service.ports)) {
         if ($port.host_ip -ne '127.0.0.1') { throw "$serviceName exposes a non-loopback port." }
     }
+}
+if ($composeJson.services.minio.image -ne 'messenger-minio:RELEASE.2025-10-15T17-29-55Z') {
+    throw 'Compose must use the locally built, security-fixed MinIO image.'
 }
 
 $caddy = Get-Content -Raw (Join-Path $repo 'deploy/Caddyfile')

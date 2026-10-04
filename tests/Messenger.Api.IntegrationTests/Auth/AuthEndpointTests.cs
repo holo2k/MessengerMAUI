@@ -186,7 +186,8 @@ public sealed class MessengerApiFactory(
     string? minioEndpoint = null,
     string? minioAccessKey = null,
     string? minioSecretKey = null,
-    bool skipSmsValidation = false) : WebApplicationFactory<Program>
+    bool skipSmsValidation = false,
+    IReadOnlyDictionary<string, string?>? configurationOverrides = null) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -199,8 +200,9 @@ public sealed class MessengerApiFactory(
                 if (descriptor is not null) services.Remove(descriptor);
             });
         }
-        builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
-            new Dictionary<string, string?>
+        builder.ConfigureAppConfiguration((_, configuration) =>
+        {
+            var values = new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Messenger"] = connectionString,
                 ["Encryption:ActiveKeyVersion"] = "1",
@@ -217,6 +219,12 @@ public sealed class MessengerApiFactory(
                 , ["Minio:AccessKey"] = minioAccessKey ?? "messenger"
                 , ["Minio:SecretKey"] = minioSecretKey ?? "messenger-local-only"
                 , ["Minio:Bucket"] = $"messenger-tests-{Guid.NewGuid():N}"
-            }));
+            };
+            if (configurationOverrides is not null)
+            {
+                foreach (var pair in configurationOverrides) values[pair.Key] = pair.Value;
+            }
+            configuration.AddInMemoryCollection(values);
+        });
     }
 }

@@ -44,6 +44,32 @@ public sealed class HardeningTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Cors_preflight_allows_only_configured_origin()
+    {
+        await using var factory = new MessengerApiFactory(
+            _postgres.GetConnectionString(),
+            "Development",
+            100,
+            configurationOverrides: new Dictionary<string, string?>
+            {
+                ["Cors:AllowedOrigins:0"] = "https://trusted.example"
+            });
+        var client = factory.CreateClient();
+
+        using var allowedRequest = CreatePreflight("https://trusted.example");
+        using var allowed = await client.SendAsync(allowedRequest);
+        Assert.Equal(HttpStatusCode.NoContent, allowed.StatusCode);
+        Assert.Equal("https://trusted.example", allowed.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        Assert.Equal("true", allowed.Headers.GetValues("Access-Control-Allow-Credentials").Single());
+
+        using var rejectedRequest = CreatePreflight("https://untrusted.example");
+        using var rejected = await client.SendAsync(rejectedRequest);
+        Assert.Equal(HttpStatusCode.NoContent, rejected.StatusCode);
+        Assert.False(rejected.Headers.Contains("Access-Control-Allow-Origin"));
+        Assert.False(rejected.Headers.Contains("Access-Control-Allow-Credentials"));
+    }
+
+    [Fact]
     public async Task Domain_403_409_and_422_keep_problem_contract_and_development_exposes_openapi()
     {
         await using var factory = new MessengerApiFactory(_postgres.GetConnectionString(), "Development", 100);
@@ -87,6 +113,14 @@ public sealed class HardeningTests : IAsyncLifetime
     private static async Task<AuthSessionResponse> Register(HttpClient client, string phone) { client.DefaultRequestHeaders.Authorization = null; var challenge = await Post<ChallengeResponse>(client, "/api/auth/challenges", new ChallengeRequest(phone, "RU", "register")); return await Post<AuthSessionResponse>(client, "/api/auth/register", new CompleteChallengeRequest(challenge.ChallengeId, "111111", "Tests")); }
     private static void Authorize(HttpClient client, AuthSessionResponse session) => client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", session.AccessToken);
     private static async Task<T> Post<T>(HttpClient client, string uri, object body) { using var response = await client.PostAsJsonAsync(uri, body); response.EnsureSuccessStatusCode(); return (await response.Content.ReadFromJsonAsync<T>())!; }
+    private static HttpRequestMessage CreatePreflight(string origin)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Options, "/api/auth/challenges");
+        request.Headers.Add("Origin", origin);
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        request.Headers.Add("Access-Control-Request-Headers", "content-type");
+        return request;
+    }
     private sealed class RecordingLoggerProvider : ILoggerProvider, ILogger
     {
         public System.Collections.Concurrent.ConcurrentQueue<string> Messages { get; } = [];

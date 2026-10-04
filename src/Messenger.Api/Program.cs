@@ -122,6 +122,15 @@ builder.Services.AddHostedService<AccountDeletionWorker>();
 builder.Services.AddHostedService<SmsProviderStartupValidator>();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
+builder.Services.AddCors(options =>
+{
+    var settings = builder.Configuration.GetSection(CorsSettings.SectionName).Get<CorsSettings>() ?? new CorsSettings();
+    options.AddPolicy(CorsSettings.PolicyName, policy => policy
+        .WithOrigins(settings.AllowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials());
+});
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -280,6 +289,7 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 }));
 app.UseMiddleware<ProblemDetailsMiddleware>();
 app.UseMiddleware<SafeRequestLoggingMiddleware>();
+app.UseCors(CorsSettings.PolicyName);
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

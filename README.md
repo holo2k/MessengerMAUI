@@ -22,7 +22,7 @@
 3. В отдельном PowerShell запустите API: `./scripts/run-api.ps1`.
 4. Ещё в одном PowerShell запустите Android: `./scripts/run-android.ps1`. Скрипт сам найдёт установленный AVD, запустит эмулятор, дождётся полной загрузки и развернёт Debug-приложение. Конкретный AVD можно выбрать через `-AvdName pixel_7_-_api_36_0`.
 
-Не запускайте для локальной разработки голые команды `dotnet ef database update` и `dotnet build -t:Run`: первая не загружает секреты PostgreSQL из `.env`, а вторая не запускает выключенный эмулятор. Debug Android обращается к API по `http://10.0.2.2:5192`; это разрешено только debug-манифестом. Release остаётся HTTPS-only.
+Не запускайте для локальной разработки голые команды `dotnet ef database update` и `dotnet build -t:Run`: первая не загружает секреты PostgreSQL из `.env`, а вторая не запускает выключенный эмулятор. По умолчанию все сборки MAUI обращаются к общему Development API по `https://api.projectdomain.ru/`.
 
 `run-api.ps1` намеренно не завершается, пока работает сервер. Оставьте это окно открытым; строка `Now listening on: http://localhost:5192` означает успешный запуск. Остановка — `Ctrl+C`. В отличие от него, `prepare-dev.ps1` должен завершиться сообщением `Development dependencies and database are ready.`.
 
@@ -33,7 +33,7 @@ New-Item -ItemType Junction -Path "$env:LOCALAPPDATA\MessengerWorkspace" -Target
 Set-Location "$env:LOCALAPPDATA\MessengerWorkspace"
 ```
 
-Для локального HTTPS выполните `dotnet dev-certs https --trust`. Android-эмулятор обращается к хосту как `10.0.2.2`. Cleartext разрешён только этому адресу в Debug; Release требует HTTPS.
+Для явного локального запуска задайте `MESSENGER_API_BASE_URL=http://10.0.2.2:5192/` перед запуском Android Debug. Cleartext разрешён только адресу эмулятора `10.0.2.2` в Debug; Release и любые удалённые адреса требуют HTTPS.
 
 ## Проверка
 

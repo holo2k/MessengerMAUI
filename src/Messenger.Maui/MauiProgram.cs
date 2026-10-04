@@ -31,10 +31,11 @@ public static class MauiProgram
 		var endpoints = ApiEndpointOptions.Create(
 			DeviceInfo.Platform == DevicePlatform.Android,
 #if DEBUG
-			isDebug: true);
+			isDebug: true,
 #else
-			isDebug: false);
+			isDebug: false,
 #endif
+			configuredBaseAddress: Environment.GetEnvironmentVariable("MESSENGER_API_BASE_URL"));
 		builder.Services.AddSingleton(endpoints);
 		builder.Services.AddSingleton<ISecureSessionStore, SecureSessionStore>();
 		builder.Services.AddSingleton<INavigationService, NavigationService>();

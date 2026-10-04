@@ -22,6 +22,8 @@ chown root:messenger /etc/messenger
 chmod 0750 /etc/messenger
 chown root:messenger /opt/messenger /opt/messenger/releases
 chmod 0755 /opt/messenger /opt/messenger/releases
+chown root:messenger-deploy /var/lib/messenger-deploy
+chmod 0750 /var/lib/messenger-deploy
 chown messenger-deploy:messenger-deploy /var/lib/messenger-deploy/incoming
 chmod 0750 /var/lib/messenger-deploy/incoming
 

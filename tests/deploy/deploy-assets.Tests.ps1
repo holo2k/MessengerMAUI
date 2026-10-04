@@ -49,6 +49,16 @@ foreach ($requiredText in @('^[0-9a-f]{7,40}$', 'readlink -f', 'systemctl restar
     if (-not $deploy.Contains($requiredText, [StringComparison]::Ordinal)) { throw "Deployment script is missing safety behavior: $requiredText" }
 }
 
+$bootstrap = Get-Content -Raw (Join-Path $repo 'deploy/bootstrap-ubuntu.sh')
+foreach ($requiredText in @(
+    'chown root:messenger-deploy /var/lib/messenger-deploy',
+    'chmod 0750 /var/lib/messenger-deploy'
+)) {
+    if (-not $bootstrap.Contains($requiredText, [StringComparison]::Ordinal)) {
+        throw "Bootstrap must make the incoming directory parent traversable by the deploy account: $requiredText"
+    }
+}
+
 $example = Get-Content -Raw (Join-Path $repo 'deploy/messenger.env.example')
 foreach ($pattern in @('Password=replace-with-postgres-password', 'Minio__SecretKey=replace-with', 'Jwt__SigningKey=replace-with')) {
     if (-not $example.Contains($pattern, [StringComparison]::Ordinal)) { throw "Environment template must contain placeholder: $pattern" }

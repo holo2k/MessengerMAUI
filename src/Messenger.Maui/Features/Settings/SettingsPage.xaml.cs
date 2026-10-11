@@ -12,11 +12,47 @@ public partial class SettingsPage : ContentPage
     public SettingsPage(SettingsViewModel viewModel, IMediaCaptureService capture, IMediaUploader uploader, IAvatarClient avatars)
     {
         InitializeComponent(); BindingContext = _viewModel = viewModel; _capture = capture; _uploader = uploader; _avatars = avatars;
-        var values = new[] { "everybody", "contacts", "nobody" }; PhonePrivacyPicker.ItemsSource = values; AvatarPrivacyPicker.ItemsSource = values; LastSeenPrivacyPicker.ItemsSource = values;
+        var values = new[] { "Все", "Мои контакты", "Никто" }; PhonePrivacyPicker.ItemsSource = values; AvatarPrivacyPicker.ItemsSource = values; LastSeenPrivacyPicker.ItemsSource = values;
     }
-    protected override async void OnAppearing() { base.OnAppearing(); await SafeAsync(_viewModel.LoadAsync); }
+    private static readonly string[] PrivacyValues = ["everybody", "contacts", "nobody"];
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await SafeAsync(_viewModel.LoadAsync);
+        PhonePrivacyPicker.SelectedIndex = Array.IndexOf(PrivacyValues, _viewModel.PhonePrivacy);
+        AvatarPrivacyPicker.SelectedIndex = Array.IndexOf(PrivacyValues, _viewModel.AvatarPrivacy);
+        LastSeenPrivacyPicker.SelectedIndex = Array.IndexOf(PrivacyValues, _viewModel.LastSeenPrivacy);
+    }
+    private async void OnEditProfileClicked(object? s, EventArgs e)
+    {
+        if (ProfileDetails.IsVisible)
+        {
+            await SafeAsync(_viewModel.SaveProfileAsync);
+            ProfileDetails.IsVisible = false;
+            EditProfileButton.Text = "Ред.";
+        }
+        else { ProfileDetails.IsVisible = true; EditProfileButton.Text = "Готово"; }
+    }
+    private void OnSectionTapped(object? s, TappedEventArgs e)
+    {
+        var section = (e.Parameter as string) switch
+        {
+            "phone" => PhoneSection, "privacy" => PrivacySection, "security" => SecuritySection,
+            "twoFactor" => TwoFactorSection, "support" => SupportSection, "deletion" => DeletionSection, _ => null
+        };
+        if (section is null) return;
+        var visible = !section.IsVisible;
+        foreach (var item in new[] { PhoneSection, PrivacySection, SecuritySection, TwoFactorSection, SupportSection, DeletionSection }) item.IsVisible = false;
+        section.IsVisible = visible;
+    }
     private async void OnSaveProfileClicked(object? s, EventArgs e) => await SafeAsync(_viewModel.SaveProfileAsync);
-    private async void OnSavePrivacyClicked(object? s, EventArgs e) => await SafeAsync(_viewModel.SavePrivacyAsync);
+    private async void OnSavePrivacyClicked(object? s, EventArgs e)
+    {
+        _viewModel.PhonePrivacy = PrivacyValues[Math.Max(0, PhonePrivacyPicker.SelectedIndex)];
+        _viewModel.AvatarPrivacy = PrivacyValues[Math.Max(0, AvatarPrivacyPicker.SelectedIndex)];
+        _viewModel.LastSeenPrivacy = PrivacyValues[Math.Max(0, LastSeenPrivacyPicker.SelectedIndex)];
+        await SafeAsync(_viewModel.SavePrivacyAsync);
+    }
     private async void OnBeginPhoneClicked(object? s, EventArgs e) => await SafeAsync(ct => _viewModel.BeginPhoneChangeAsync(_viewModel.Phone, ct));
     private async void OnConfirmPhoneClicked(object? s, EventArgs e) { var code = await DisplayPromptAsync("Смена номера", "Код из SMS (dev: 111111)", keyboard: Keyboard.Numeric); if (!string.IsNullOrWhiteSpace(code)) await SafeAsync(ct => _viewModel.ConfirmPhoneChangeAsync(code, ct)); }
     private async void OnBeginTwoFactorClicked(object? s, EventArgs e) => await SafeAsync(ct => _viewModel.BeginTwoFactorAsync(EmailEntry.Text ?? "", ct));

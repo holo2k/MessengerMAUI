@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:contacts="clr-namespace:Messenger.Contracts.Contacts;assembly=Messenger.Contracts"
+             xmlns:ui="clr-namespace:Messenger.Maui.Controls"
+             x:Class="Messenger.Maui.Features.Chats.NewChatPage" Title="Создать чат"
+             Shell.NavBarIsVisible="False" Shell.TabBarIsVisible="False" BackgroundColor="{StaticResource PageBackground}">
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+        <Grid ColumnDefinitions="60,*,90" BackgroundColor="{StaticResource BarBackground}" HeightRequest="44">
+            <ImageButton Source="icon_back.png" Clicked="OnBackClicked" SemanticProperties.Description="Назад" />
+            <Label Grid.Column="1" Text="Создать чат" Style="{StaticResource NavigationTitle}" />
+            <Button x:Name="CreateButton" Grid.Column="2" Text="Создать" IsEnabled="False" Clicked="OnCreateClicked" />
+        </Grid>
+        <Border Grid.Row="1" Style="{StaticResource SearchField}" Margin="12,4,12,8">
+            <Grid ColumnDefinitions="*,36">
+                <Entry x:Name="FilterEntry" Placeholder="Поиск по контактам" TextChanged="OnFilterChanged" MinimumHeightRequest="36" />
+                <Image Grid.Column="1" Source="icon_search.png" HeightRequest="18" WidthRequest="18" />
+            </Grid>
+        </Border>
+        <Entry x:Name="GroupTitleEntry" Grid.Row="2" Placeholder="Название группы" Margin="16,0,16,8" IsVisible="False" />
+        <CollectionView x:Name="ContactsList" Grid.Row="3" SelectionMode="Multiple" SelectionChanged="OnSelectionChanged">
+            <CollectionView.EmptyView><Label Text="Контакты не найдены" HorizontalTextAlignment="Center" Margin="24,60" TextColor="{StaticResource TextSecondary}" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="contacts:ContactResponse">
+                    <Grid ColumnDefinitions="40,*,24" Padding="16,8" ColumnSpacing="12" BackgroundColor="White" MinimumHeightRequest="56">
+                        <VisualStateManager.VisualStateGroups><VisualStateGroup Name="CommonStates">
+                            <VisualState Name="Normal" /><VisualState Name="Selected"><VisualState.Setters><Setter Property="BackgroundColor" Value="{StaticResource PrimarySoft}" /></VisualState.Setters></VisualState>
+                        </VisualStateGroup></VisualStateManager.VisualStateGroups>
+                        <ui:AvatarView Person="{Binding .}" HeightRequest="36" WidthRequest="36" />
+                        <Label Grid.Column="1" Text="{Binding ., Converter={StaticResource DisplayValue}, ConverterParameter=name}" FontSize="15" VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                        <Border Grid.Column="2" Stroke="{StaticResource TextTertiary}" StrokeThickness="1" StrokeShape="Ellipse" HeightRequest="20" WidthRequest="20" VerticalOptions="Center" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

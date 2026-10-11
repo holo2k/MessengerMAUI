@@ -8,6 +8,42 @@ namespace Messenger.Maui.Tests.Services;
 public sealed class AuthSessionHandlerTests
 {
     [Fact]
+    public async Task Startup_token_refresh_closes_the_unread_response_away_from_the_ui_thread()
+    {
+        var store = new MemorySessionStore
+        {
+            Current = new ClientSession(RecordingAuthApi.CreateSession("old"), "Android")
+        };
+        var server = new UnreadResponseServerHandler();
+        using var client = new HttpClient(new AuthSessionHandler(store, new RecordingAuthApi(), new RecordingNavigation())
+        {
+            InnerHandler = server
+        });
+        var started = new TaskCompletionSource<Task<HttpResponseMessage>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var uiThread = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(new SynchronizationContext());
+            server.UiThreadId = Environment.CurrentManagedThreadId;
+            try
+            {
+                started.SetResult(client.GetAsync("https://example.test/api/chat-folders", HttpCompletionOption.ResponseHeadersRead));
+            }
+            catch (Exception exception)
+            {
+                started.SetException(exception);
+            }
+        }) { IsBackground = true };
+        uiThread.Start();
+
+        using var response = await (await started.Task.WaitAsync(TimeSpan.FromSeconds(5))).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(server.UnreadContent.WasDisposed);
+        Assert.NotEqual(server.UiThreadId, server.UnreadContent.DisposeThreadId);
+        Assert.Equal("refresh-new", store.Current?.Session.RefreshToken);
+    }
+
+    [Fact]
     public async Task Concurrent_unauthorized_responses_refresh_once_and_retry_with_rotated_tokens()
     {
         var store = new MemorySessionStore
@@ -45,6 +81,42 @@ public sealed class AuthSessionHandlerTests
         Assert.Null(store.Current);
         Assert.Equal(1, navigation.LoginCount);
         Assert.Equal(1, server.RequestCount);
+    }
+
+    private sealed class UnreadResponseServerHandler : HttpMessageHandler
+    {
+        public int UiThreadId { get; set; }
+        public ThreadSensitiveContent UnreadContent { get; private set; } = null!;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Headers.Authorization?.Parameter == "access-new")
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+
+            UnreadContent = new ThreadSensitiveContent(UiThreadId);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = UnreadContent });
+        }
+    }
+
+    private sealed class ThreadSensitiveContent(int uiThreadId) : HttpContent
+    {
+        public bool WasDisposed { get; private set; }
+        public int DisposeThreadId { get; private set; }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) => Task.CompletedTask;
+        protected override bool TryComputeLength(out long length) { length = 0; return true; }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                DisposeThreadId = Environment.CurrentManagedThreadId;
+                if (DisposeThreadId == uiThreadId)
+                    throw new InvalidOperationException("Closing an unread Android response can perform network I/O on the UI thread.");
+                WasDisposed = true;
+            }
+            base.Dispose(disposing);
+        }
     }
 
     private sealed class TokenAwareServerHandler(string acceptedToken) : HttpMessageHandler

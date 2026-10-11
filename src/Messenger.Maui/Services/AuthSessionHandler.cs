@@ -15,23 +15,23 @@ public sealed class AuthSessionHandler(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        var initial = await sessionStore.GetAsync(cancellationToken);
+        var initial = await sessionStore.GetAsync(cancellationToken).ConfigureAwait(false);
         if (initial is not null)
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", initial.Session.AccessToken);
         }
 
-        using var retry = await CloneAsync(request, cancellationToken);
-        var response = await base.SendAsync(request, cancellationToken);
+        using var retry = await CloneAsync(request, cancellationToken).ConfigureAwait(false);
+        var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode != HttpStatusCode.Unauthorized || initial is null)
         {
             return response;
         }
 
-        await _refreshLock.WaitAsync(cancellationToken);
+        await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var current = await sessionStore.GetAsync(cancellationToken);
+            var current = await sessionStore.GetAsync(cancellationToken).ConfigureAwait(false);
             if (current is null)
             {
                 return response;
@@ -42,21 +42,23 @@ public sealed class AuthSessionHandler(
                 try
                 {
                     var refreshed = await authApi.RefreshAsync(
-                        new RefreshRequest(current.Session.RefreshToken, current.DeviceLabel), cancellationToken);
+                        new RefreshRequest(current.Session.RefreshToken, current.DeviceLabel), cancellationToken).ConfigureAwait(false);
                     current = new ClientSession(refreshed, current.DeviceLabel);
-                    await sessionStore.SaveAsync(current, cancellationToken);
+                    await sessionStore.SaveAsync(current, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception exception) when (exception is HttpRequestException or InvalidDataException)
                 {
-                    await sessionStore.ClearAsync(cancellationToken);
-                    await navigation.ShowLoginAsync();
+                    await sessionStore.ClearAsync(cancellationToken).ConfigureAwait(false);
+                    await navigation.ShowLoginAsync().ConfigureAwait(false);
                     return response;
                 }
             }
 
             retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", current.Session.AccessToken);
-            response.Dispose();
-            return await base.SendAsync(retry, cancellationToken);
+            // Android may drain an unread response body while closing its native stream.
+            // Even completed awaits must not let that network I/O run on the UI thread.
+            await Task.Run(response.Dispose, CancellationToken.None).ConfigureAwait(false);
+            return await base.SendAsync(retry, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -83,7 +85,7 @@ public sealed class AuthSessionHandler(
         }
         if (request.Content is not null)
         {
-            var content = new ByteArrayContent(await request.Content.ReadAsByteArrayAsync(cancellationToken));
+            var content = new ByteArrayContent(await request.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false));
             foreach (var header in request.Content.Headers)
             {
                 content.Headers.TryAddWithoutValidation(header.Key, header.Value);

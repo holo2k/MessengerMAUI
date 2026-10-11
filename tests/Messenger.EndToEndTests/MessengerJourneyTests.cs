@@ -61,8 +61,11 @@ public sealed class MessengerJourneyTests : IAsyncLifetime
         var stored = await Upload(client, audio);
         var mediaMessage = await Post<MessageResponse>(client, $"/api/chats/{group.Id}/messages", new SendMessageRequest(Guid.NewGuid(), "audio", null, [stored.Id])); Assert.Equal("audio", mediaMessage.Type);
         var track = await Post<MusicTrackResponse>(client, "/api/music/tracks", new CreateTrackRequest(stored.Id, "E2E трек", "Автор", 1000, null));
-        await Success(client.PostAsJsonAsync($"/api/music/tracks/{track.Id}/declaration", new RightsDeclarationRequest("Подтверждаю права")));
-        await Success(client.PutAsJsonAsync($"/api/admin/music/tracks/{track.Id}", new ModerateTrackRequest("approve", "ok")));
+        Assert.Equal("available", track.Status);
+        var library = await client.GetFromJsonAsync<MusicTrackResponse[]>("/api/music/library");
+        Assert.Contains(library!, item => item.Id == track.Id);
+        var search = await client.GetFromJsonAsync<MusicTrackResponse[]>("/api/music/search?query=E2E");
+        Assert.Contains(search!, item => item.Id == track.Id);
         Assert.NotNull(await client.GetFromJsonAsync<DownloadAuthorizationResponse>($"/api/music/tracks/{track.Id}/stream"));
         await Success(client.PutAsJsonAsync($"/api/admin/music/tracks/{track.Id}", new ModerateTrackRequest("block", "жалоба")));
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/music/tracks/{track.Id}/stream")).StatusCode);

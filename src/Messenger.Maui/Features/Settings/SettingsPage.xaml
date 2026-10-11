@@ -1,48 +1,133 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="Messenger.Maui.Features.Settings.SettingsPage" Title="Настройки">
-    <ScrollView>
-        <VerticalStackLayout Padding="16" Spacing="10">
-            <Label Text="Профиль" FontSize="22" FontAttributes="Bold" />
-            <Button Text="Загрузить фото" Clicked="OnAvatarClicked" />
-            <Entry Text="{Binding FirstName}" Placeholder="Имя" />
-            <Entry Text="{Binding LastName}" Placeholder="Фамилия" />
-            <Entry Text="{Binding Username}" Placeholder="Юзернейм (необязательно)" />
-            <Editor Text="{Binding Bio}" Placeholder="Био" AutoSize="TextChanges" />
-            <Button Text="Сохранить профиль" Clicked="OnSaveProfileClicked" />
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:settings="clr-namespace:Messenger.Maui.Features.Settings" xmlns:users="clr-namespace:Messenger.Contracts.Users;assembly=Messenger.Contracts"
+             xmlns:support="clr-namespace:Messenger.Contracts.Support;assembly=Messenger.Contracts" xmlns:ui="clr-namespace:Messenger.Maui.Controls"
+             x:Class="Messenger.Maui.Features.Settings.SettingsPage" x:DataType="settings:SettingsViewModel"
+             Title="Настройки" Shell.NavBarIsVisible="False" BackgroundColor="{StaticResource PageBackground}">
+    <Grid RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="80,*,100" HeightRequest="44" BackgroundColor="{StaticResource BarBackground}">
+            <Label Grid.Column="1" Text="Настройки" Style="{StaticResource NavigationTitle}" />
+            <Button x:Name="EditProfileButton" Grid.Column="2" Text="Ред." Clicked="OnEditProfileClicked" />
+        </Grid>
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="0" Padding="0,0,0,20">
+                <VerticalStackLayout BackgroundColor="White" Spacing="0" Padding="16,0">
+                    <Grid ColumnDefinitions="64,*" Padding="0,22" ColumnSpacing="16">
+                        <ui:AvatarView Person="{Binding FirstName}" WidthRequest="60" HeightRequest="60">
+                            <ui:AvatarView.GestureRecognizers><TapGestureRecognizer Tapped="OnAvatarClicked" /></ui:AvatarView.GestureRecognizers>
+                        </ui:AvatarView>
+                        <Label Grid.Column="1" Text="Введите своё имя и выберите фото" FontSize="12" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center">
+                            <Label.GestureRecognizers><TapGestureRecognizer Tapped="OnAvatarClicked" /></Label.GestureRecognizers>
+                        </Label>
+                    </Grid>
+                    <BoxView Style="{StaticResource SeparatorLine}" />
+                    <Entry Text="{Binding FirstName}" Placeholder="Имя" ReturnType="Done" Completed="OnSaveProfileClicked" />
+                    <BoxView Style="{StaticResource SeparatorLine}" />
+                    <VerticalStackLayout x:Name="ProfileDetails" IsVisible="False" Spacing="0">
+                        <Entry Text="{Binding LastName}" Placeholder="Фамилия" />
+                        <BoxView Style="{StaticResource SeparatorLine}" />
+                        <Editor Text="{Binding Bio}" Placeholder="Био" MinimumHeightRequest="70" />
+                    </VerticalStackLayout>
+                    <BoxView Color="White" HeightRequest="14" />
+                </VerticalStackLayout>
 
-            <Label Text="Номер телефона" FontAttributes="Bold" />
-            <Entry Text="{Binding Phone}" Keyboard="Telephone" />
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                <Button Text="Запросить код" Clicked="OnBeginPhoneClicked" />
-                <Button Grid.Column="1" Text="Подтвердить" Clicked="OnConfirmPhoneClicked" />
-            </Grid>
+                <Label Text="ЮЗЕРНЕЙМ" Style="{StaticResource SectionCaption}" />
+                <Grid BackgroundColor="White" Padding="16,0">
+                    <Entry Text="{Binding Username}" Placeholder="@username" ReturnType="Done" Completed="OnSaveProfileClicked" />
+                </Grid>
+                <Label Text="ТЕЛЕФОН" Style="{StaticResource SectionCaption}" />
+                <Grid ColumnDefinitions="*,20" BackgroundColor="White" Padding="16,0" MinimumHeightRequest="48">
+                    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSectionTapped" CommandParameter="phone" /></Grid.GestureRecognizers>
+                    <Label Text="{Binding Phone}" VerticalOptions="Center" />
+                    <Image Grid.Column="1" Source="icon_chevron.png" HeightRequest="16" WidthRequest="16" />
+                </Grid>
+                <VerticalStackLayout x:Name="PhoneSection" IsVisible="False" BackgroundColor="White" Padding="16,8" Spacing="8">
+                    <Entry Text="{Binding Phone}" Keyboard="Telephone" Placeholder="Новый номер телефона" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button Text="Запросить код" Clicked="OnBeginPhoneClicked" />
+                        <Button Grid.Column="1" Text="Подтвердить" Clicked="OnConfirmPhoneClicked" />
+                    </Grid>
+                </VerticalStackLayout>
 
-            <Label Text="Приватность" FontSize="20" FontAttributes="Bold" />
-            <Label Text="Кто видит телефон" /><Picker x:Name="PhonePrivacyPicker" SelectedItem="{Binding PhonePrivacy}" />
-            <Label Text="Кто видит фото" /><Picker x:Name="AvatarPrivacyPicker" SelectedItem="{Binding AvatarPrivacy}" />
-            <Label Text="Кто видит последний вход" /><Picker x:Name="LastSeenPrivacyPicker" SelectedItem="{Binding LastSeenPrivacy}" />
-            <Button Text="Сохранить приватность" Clicked="OnSavePrivacyClicked" />
+                <Grid ColumnDefinitions="*,20" BackgroundColor="White" Padding="16,0" MinimumHeightRequest="48" Margin="0,22,0,0">
+    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSectionTapped" CommandParameter="privacy" /></Grid.GestureRecognizers>
+    <Label Text="Приватность" VerticalOptions="Center" FontSize="16" />
+    <Image Grid.Column="1" Source="icon_chevron.png" HeightRequest="16" WidthRequest="16" />
+</Grid>
+                <VerticalStackLayout x:Name="PrivacySection" IsVisible="False" BackgroundColor="White" Padding="16,8" Spacing="4">
+                    <Label Text="Кто видит телефон" Style="{StaticResource SecondaryLabel}" /><Picker x:Name="PhonePrivacyPicker" Title="Видимость телефона" />
+                    <Label Text="Кто видит фото" Style="{StaticResource SecondaryLabel}" /><Picker x:Name="AvatarPrivacyPicker" Title="Видимость фото" />
+                    <Label Text="Кто видит последний вход" Style="{StaticResource SecondaryLabel}" /><Picker x:Name="LastSeenPrivacyPicker" Title="Видимость последнего входа" />
+                    <Button Text="Сохранить" Clicked="OnSavePrivacyClicked" HorizontalOptions="End" />
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource SeparatorLine}" Margin="16,0,0,0" />
+                <Grid ColumnDefinitions="*,20" BackgroundColor="White" Padding="16,0" MinimumHeightRequest="48" >
+    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSectionTapped" CommandParameter="security" /></Grid.GestureRecognizers>
+    <Label Text="Безопасность" VerticalOptions="Center" FontSize="16" />
+    <Image Grid.Column="1" Source="icon_chevron.png" HeightRequest="16" WidthRequest="16" />
+</Grid>
+                <VerticalStackLayout x:Name="SecuritySection" IsVisible="False" BackgroundColor="White" Spacing="8">
+                    <Label Text="АКТИВНЫЕ СЕССИИ" Style="{StaticResource SectionCaption}" Margin="16,8" />
+                    <CollectionView ItemsSource="{Binding Sessions}" HeightRequest="180">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="users:SessionResponse">
+                                <Grid ColumnDefinitions="*,Auto" Padding="16,8">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label Text="{Binding DeviceLabel}" FontSize="15" />
+                                        <Label Text="{Binding ExpiresAt, StringFormat='до {0:dd.MM.yyyy}'}" Style="{StaticResource SecondaryLabel}" />
+                                    </VerticalStackLayout>
+                                    <Button Grid.Column="1" Text="Завершить" TextColor="{StaticResource Danger}" FontSize="13" Clicked="OnRevokeSessionClicked" CommandParameter="{Binding .}" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource SeparatorLine}" Margin="16,0,0,0" />
+                <Grid ColumnDefinitions="*,20" BackgroundColor="White" Padding="16,0" MinimumHeightRequest="48" >
+    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSectionTapped" CommandParameter="twoFactor" /></Grid.GestureRecognizers>
+    <Label Text="Двухфакторная аутентификация" VerticalOptions="Center" FontSize="16" />
+    <Image Grid.Column="1" Source="icon_chevron.png" HeightRequest="16" WidthRequest="16" />
+</Grid>
+                <VerticalStackLayout x:Name="TwoFactorSection" IsVisible="False" BackgroundColor="White" Padding="16,8" Spacing="8">
+                    <Entry x:Name="EmailEntry" Placeholder="Почта" Keyboard="Email" />
+                    <Button Text="Отправить код" Clicked="OnBeginTwoFactorClicked" HorizontalOptions="End" />
+                    <Entry x:Name="EmailCodeEntry" Placeholder="Код из письма" Keyboard="Numeric" />
+                    <Button Text="Включить защиту" Clicked="OnConfirmTwoFactorClicked" HorizontalOptions="End" />
+                    <Button Text="Отключить защиту" TextColor="{StaticResource Danger}" Clicked="OnDisableTwoFactorClicked" HorizontalOptions="Start" />
+                </VerticalStackLayout>
 
-            <Label Text="Двухфакторная аутентификация" FontSize="20" FontAttributes="Bold" />
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8"><Entry x:Name="EmailEntry" Placeholder="Почта" Keyboard="Email"/><Button Grid.Column="1" Text="Отправить код" Clicked="OnBeginTwoFactorClicked"/></Grid>
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8"><Entry x:Name="EmailCodeEntry" Placeholder="Код из письма" Keyboard="Numeric"/><Button Grid.Column="1" Text="Включить" Clicked="OnConfirmTwoFactorClicked"/></Grid>
-            <Button Text="Отключить 2FA" Clicked="OnDisableTwoFactorClicked" />
-
-            <Label Text="Активные сессии" FontSize="20" FontAttributes="Bold" />
-            <CollectionView ItemsSource="{Binding Sessions}" HeightRequest="160">
-                <CollectionView.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" Padding="4"><VerticalStackLayout><Label Text="{Binding DeviceLabel}"/><Label Text="{Binding ExpiresAt, StringFormat='до {0:g}'}" FontSize="12"/></VerticalStackLayout><Button Grid.Column="1" Text="Завершить" Clicked="OnRevokeSessionClicked" CommandParameter="{Binding .}"/></Grid></DataTemplate></CollectionView.ItemTemplate>
-            </CollectionView>
-
-            <Label Text="Поддержка" FontSize="20" FontAttributes="Bold" />
-            <Button Text="Написать в поддержку" Clicked="OnSupportClicked" />
-            <CollectionView ItemsSource="{Binding Tickets}" HeightRequest="120"><CollectionView.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" Padding="4"><Label Text="{Binding Subject}"/><Label Grid.Column="1" Text="{Binding Status}"/></Grid></DataTemplate></CollectionView.ItemTemplate></CollectionView>
-
-            <Label Text="Удаление аккаунта" FontSize="20" FontAttributes="Bold" TextColor="DarkRed" />
-            <Label Text="После запроса все сессии будут завершены. Через 30 дней профиль будет обезличен; запрос можно отменить до этой даты." />
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="8"><Button Text="Удалить аккаунт" BackgroundColor="DarkRed" TextColor="White" Clicked="OnDeleteClicked"/><Button Grid.Column="1" Text="Отменить удаление" Clicked="OnCancelDeletionClicked"/></Grid>
-            <Label Text="{Binding Status}" TextColor="Gray" />
-        </VerticalStackLayout>
-    </ScrollView>
+                <Grid ColumnDefinitions="*,20" BackgroundColor="White" Padding="16,0" MinimumHeightRequest="48" Margin="0,22,0,0">
+    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSectionTapped" CommandParameter="support" /></Grid.GestureRecognizers>
+    <Label Text="Поддержка" VerticalOptions="Center" FontSize="16" />
+    <Image Grid.Column="1" Source="icon_chevron.png" HeightRequest="16" WidthRequest="16" />
+</Grid>
+                <VerticalStackLayout x:Name="SupportSection" IsVisible="False" BackgroundColor="White" Spacing="8" Padding="0,8">
+                    <Button Text="Написать в поддержку" Clicked="OnSupportClicked" HorizontalOptions="Start" Margin="4,0" />
+                    <CollectionView ItemsSource="{Binding Tickets}" HeightRequest="120">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="support:SupportTicketResponse">
+                                <Grid ColumnDefinitions="*,Auto" Padding="16,8" ColumnSpacing="12">
+                                    <Label Text="{Binding Subject}" FontSize="14" LineBreakMode="TailTruncation" />
+                                    <Label Grid.Column="1" Text="{Binding Status}" Style="{StaticResource SecondaryLabel}" />
+                                </Grid>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+                <BoxView Style="{StaticResource SeparatorLine}" Margin="16,0,0,0" />
+                <Grid ColumnDefinitions="*,20" BackgroundColor="White" Padding="16,0" MinimumHeightRequest="48" >
+    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSectionTapped" CommandParameter="deletion" /></Grid.GestureRecognizers>
+    <Label Text="Удалить аккаунт" VerticalOptions="Center" FontSize="16" />
+    <Image Grid.Column="1" Source="icon_chevron.png" HeightRequest="16" WidthRequest="16" />
+</Grid>
+                <VerticalStackLayout x:Name="DeletionSection" IsVisible="False" BackgroundColor="White" Padding="16,12" Spacing="8">
+                    <Label Text="После запроса все сессии будут завершены. Через 30 дней профиль будет обезличен; до этой даты запрос можно отменить." FontSize="13" TextColor="{StaticResource TextSecondary}" />
+                    <Button Text="Удалить аккаунт" TextColor="{StaticResource Danger}" Clicked="OnDeleteClicked" HorizontalOptions="Start" />
+                    <Button Text="Отменить удаление" Clicked="OnCancelDeletionClicked" HorizontalOptions="Start" />
+                </VerticalStackLayout>
+                <Label Text="{Binding Status}" FontSize="13" Margin="16,12" TextColor="{StaticResource TextSecondary}"
+                       IsVisible="{Binding Status, Converter={StaticResource DisplayValue}, ConverterParameter=notEmpty}" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
 </ContentPage>

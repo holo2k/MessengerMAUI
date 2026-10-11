@@ -1,3 +1,5 @@
+using Messenger.Maui.Services;
+
 namespace Messenger.Maui.Features.Auth;
 
 public partial class RegistrationPage : ContentPage
@@ -26,7 +28,8 @@ public partial class RegistrationPage : ContentPage
         }
         catch (Exception exception)
         {
-            StatusLabel.Text = exception.Message;
+            System.Diagnostics.Debug.WriteLine(exception);
+            StatusLabel.Text = ExceptionDisplay.Format(exception);
         }
     }
 }

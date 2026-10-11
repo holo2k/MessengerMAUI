@@ -58,11 +58,9 @@ public partial class MusicPage : ContentPage
                 if (string.IsNullOrWhiteSpace(title)) return;
                 var artist = await DisplayPromptAsync("Трек", "Исполнитель");
                 if (string.IsNullOrWhiteSpace(artist)) return;
-                var accepted = await DisplayAlertAsync("Права на музыку", "Загружая трек, вы подтверждаете наличие прав. По обоснованному требованию правообладателя трек может быть заблокирован или удалён.", "Подтверждаю", "Отмена");
-                if (!accepted) return;
                 UploadButton.Text = "Загрузка…";
                 var stored = await _uploader.UploadAsync(selection, null, ct);
-                await _viewModel.UploadAsync(stored.Id, title.Trim(), artist.Trim(), selection.DurationMs!.Value, null, true, ct);
+                await _viewModel.UploadAsync(stored.Id, title.Trim(), artist.Trim(), selection.DurationMs!.Value, null, ct);
             });
         }
         finally

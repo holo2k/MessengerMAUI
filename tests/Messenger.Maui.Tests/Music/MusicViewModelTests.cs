@@ -8,14 +8,16 @@ namespace Messenger.Maui.Tests.Music;
 public sealed class MusicViewModelTests
 {
     [Fact]
-    public async Task Search_is_debounced_and_library_add_remove_and_declaration_are_forwarded()
+    public async Task Search_is_debounced_and_upload_does_not_declare_rights()
     {
         var api = new FakeMusicApi(); var delay = new ControlledDebounceDelay(); var vm = new MusicViewModel(api, new FakeDownloads(), new FakePlayer(), delay);
         vm.SearchText = "пе"; var first = vm.SearchAsync(); await delay.FirstCallStarted; vm.SearchText = "песня"; await vm.SearchAsync(); await first;
         var track = vm.SearchResults.Single();
         await vm.AddAsync(track); await vm.RemoveAsync(track);
-        await vm.UploadAsync(Guid.NewGuid(), "Новая", "Автор", 1000, null, true);
-        Assert.Equal(1, api.SearchCalls); Assert.Equal(1, api.AddCalls); Assert.Equal(1, api.RemoveCalls); Assert.Equal(1, api.Declarations);
+        await vm.UploadAsync(Guid.NewGuid(), "Новая", "Автор", 1000, null);
+        Assert.Equal(1, api.SearchCalls); Assert.Equal(1, api.AddCalls); Assert.Equal(1, api.RemoveCalls); Assert.Equal(0, api.Declarations);
+        Assert.Equal(1, api.CreateCalls);
+        Assert.Equal("Трек отправлен на модерацию", vm.Status);
     }
 
     [Fact]
@@ -55,12 +57,12 @@ public sealed class MusicViewModelTests
     }
     private sealed class FakeMusicApi : IMusicApi
     {
-        public int SearchCalls, AddCalls, RemoveCalls, Declarations;
+        public int SearchCalls, AddCalls, RemoveCalls, Declarations, CreateCalls;
         public Task<IReadOnlyList<MusicTrackResponse>> SearchAsync(string q, CancellationToken ct) { SearchCalls++; return Task.FromResult<IReadOnlyList<MusicTrackResponse>>([Track()]); }
         public Task<IReadOnlyList<MusicTrackResponse>> LibraryAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<MusicTrackResponse>>([]);
         public Task AddAsync(Guid id, CancellationToken ct) { AddCalls++; return Task.CompletedTask; }
         public Task RemoveAsync(Guid id, CancellationToken ct) { RemoveCalls++; return Task.CompletedTask; }
-        public Task<MusicTrackResponse> CreateAsync(Guid audio, string title, string artist, long duration, Guid? cover, CancellationToken ct) => Task.FromResult(Track());
+        public Task<MusicTrackResponse> CreateAsync(Guid audio, string title, string artist, long duration, Guid? cover, CancellationToken ct) { CreateCalls++; return Task.FromResult(Track()); }
         public Task DeclareAsync(Guid id, string statement, CancellationToken ct) { Declarations++; return Task.CompletedTask; }
         public Task<DownloadAuthorizationResponse> AuthorizeAsync(Guid id, bool download, CancellationToken ct) => Task.FromResult(new DownloadAuthorizationResponse("https://audio", DateTimeOffset.UtcNow.AddMinutes(5)));
     }

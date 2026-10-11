@@ -51,7 +51,6 @@ public sealed class MusicTrack : Entity
 
     public void Approve(DateTimeOffset now)
     {
-        if (Declaration is null) throw new MusicRuleException(MusicRuleError.DeclarationRequired);
         if (Status != MusicTrackStatus.Pending) throw new MusicRuleException(MusicRuleError.InvalidState);
         Status = MusicTrackStatus.Available; UpdatedAt = now;
     }

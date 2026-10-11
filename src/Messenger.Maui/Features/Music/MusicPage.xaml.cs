@@ -7,13 +7,13 @@ namespace Messenger.Maui.Features.Music;
 public partial class MusicPage : ContentPage
 {
     private readonly MusicViewModel _viewModel;
-    private readonly IMediaCaptureService _capture;
+    private readonly IMusicFilePicker _musicFiles;
     private readonly IMediaUploader _uploader;
     private readonly IMusicRealtimeClient _realtime;
     private bool _isSearching;
     public bool IsSearching { get => _isSearching; private set { _isSearching = value; OnPropertyChanged(); } }
-    public MusicPage(MusicViewModel viewModel, IMediaCaptureService capture, IMediaUploader uploader, IMusicRealtimeClient realtime)
-    { InitializeComponent(); BindingContext = _viewModel = viewModel; _capture = capture; _uploader = uploader; _realtime = realtime; _realtime.TrackStatusChanged += OnTrackStatusChangedAsync; }
+    public MusicPage(MusicViewModel viewModel, IMusicFilePicker musicFiles, IMediaUploader uploader, IMusicRealtimeClient realtime)
+    { InitializeComponent(); BindingContext = _viewModel = viewModel; _musicFiles = musicFiles; _uploader = uploader; _realtime = realtime; _realtime.TrackStatusChanged += OnTrackStatusChangedAsync; }
     protected override async void OnAppearing() { base.OnAppearing(); await SafeAsync(_viewModel.LoadLibraryAsync); await SafeAsync(_realtime.ConnectAsync); }
     private Task OnTrackStatusChangedAsync(MusicTrackStatusChangedEvent value) => value.Status is "blocked" or "deleted"
         ? MainThread.InvokeOnMainThreadAsync(() => _viewModel.OnTrackBlockedAsync(value.TrackId, value.Reason))
@@ -46,13 +46,30 @@ public partial class MusicPage : ContentPage
     private void OnPauseClicked(object? s, EventArgs e) => _viewModel.TogglePause();
     private async void OnUploadClicked(object? s, EventArgs e)
     {
-        var accepted = await DisplayAlertAsync("Права на музыку", "Загружая трек, вы подтверждаете наличие прав. По обоснованному требованию правообладателя трек может быть заблокирован или удалён.", "Подтверждаю", "Отмена");
-        if (!accepted) return;
-        var picked = await _capture.AcquireAsync(MediaKind.Audio);
-        if (picked.Selection is null) return;
-        var title = await DisplayPromptAsync("Трек", "Название"); var artist = await DisplayPromptAsync("Трек", "Исполнитель");
-        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(artist)) return;
-        await SafeAsync(async ct => { var stored = await _uploader.UploadAsync(picked.Selection, null, ct); await _viewModel.UploadAsync(stored.Id, title, artist, picked.Selection.DurationMs ?? 1, null, true, ct); });
+        if (!UploadButton.IsEnabled) return;
+        UploadButton.IsEnabled = false;
+        try
+        {
+            await SafeAsync(async ct =>
+            {
+                var selection = await _musicFiles.PickAsync(ct);
+                if (selection is null) return;
+                var title = await DisplayPromptAsync("Трек", "Название", initialValue: Path.GetFileNameWithoutExtension(selection.FileName));
+                if (string.IsNullOrWhiteSpace(title)) return;
+                var artist = await DisplayPromptAsync("Трек", "Исполнитель");
+                if (string.IsNullOrWhiteSpace(artist)) return;
+                var accepted = await DisplayAlertAsync("Права на музыку", "Загружая трек, вы подтверждаете наличие прав. По обоснованному требованию правообладателя трек может быть заблокирован или удалён.", "Подтверждаю", "Отмена");
+                if (!accepted) return;
+                UploadButton.Text = "Загрузка…";
+                var stored = await _uploader.UploadAsync(selection, null, ct);
+                await _viewModel.UploadAsync(stored.Id, title.Trim(), artist.Trim(), selection.DurationMs!.Value, null, true, ct);
+            });
+        }
+        finally
+        {
+            UploadButton.Text = "Загрузить";
+            UploadButton.IsEnabled = true;
+        }
     }
     private async Task SafeAsync(Func<CancellationToken, Task> action) { try { await action(CancellationToken.None); } catch (Exception ex) { await DisplayAlertAsync("Ошибка", ex.Message, "OK"); } }
 }

@@ -29,7 +29,8 @@ public sealed class FileSignatureInspector : IFileInspector
             string.Equals(value.Mime, declaredContentType, StringComparison.OrdinalIgnoreCase));
         if (rule is null || !string.Equals(rule.Mime, storedContentType, StringComparison.OrdinalIgnoreCase) ||
             header.Length < rule.Offset + rule.Signature.Length ||
-            !header.Slice(rule.Offset, rule.Signature.Length).SequenceEqual(rule.Signature))
+            !(header.Slice(rule.Offset, rule.Signature.Length).SequenceEqual(rule.Signature) ||
+              (extension == ".mp3" && IsMp3Frame(header))))
         {
             throw new MediaException(MediaError.FileTypeMismatch);
         }
@@ -38,4 +39,9 @@ public sealed class FileSignatureInspector : IFileInspector
             throw new MediaException(MediaError.FileTooLarge);
         }
     }
+
+    private static bool IsMp3Frame(ReadOnlySpan<byte> header) =>
+        header.Length >= 4 && header[0] == 0xFF && (header[1] & 0xE0) == 0xE0 &&
+        (header[1] & 0x18) != 0x08 && (header[1] & 0x06) == 0x02 &&
+        (header[2] & 0xF0) is not (0x00 or 0xF0) && (header[2] & 0x0C) != 0x0C;
 }

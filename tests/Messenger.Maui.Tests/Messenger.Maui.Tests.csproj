@@ -42,6 +42,7 @@
     <Compile Include="..\..\src\Messenger.Maui\Services\MusicServices.cs" Link="Services\MusicServices.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\SettingsApi.cs" Link="Services\SettingsApi.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\ApiEndpointOptions.cs" Link="Services\ApiEndpointOptions.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\ExceptionDisplay.cs" Link="Services\ExceptionDisplay.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Settings\SettingsViewModel.cs" Link="Features\Settings\SettingsViewModel.cs" />
   </ItemGroup>
 

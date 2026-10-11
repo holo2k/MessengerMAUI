@@ -1,3 +1,5 @@
+using Messenger.Maui.Services;
+
 namespace Messenger.Maui.Features.Auth;
 
 public partial class RegistrationPage : ContentPage
@@ -50,7 +52,12 @@ public partial class RegistrationPage : ContentPage
             await action(CancellationToken.None);
             return true;
         }
-        catch (Exception exception) { StatusLabel.Text = exception.Message; return false; }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Debug.WriteLine(exception);
+            StatusLabel.Text = ExceptionDisplay.Format(exception);
+            return false;
+        }
         finally { ContinueButton.IsEnabled = true; }
     }
 }

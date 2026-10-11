@@ -50,8 +50,48 @@ public interface IMusicDownloadService
 public interface IAudioPlayerService
 {
     bool IsPlaying { get; }
+    double PositionMs { get; }
+    double DurationMs { get; }
+    bool IsBuffering { get; }
+    double BufferedProgress { get; }
+    string? PlaybackError { get; }
+    event EventHandler? PlaybackEnded;
     Task PlayAsync(string source, CancellationToken ct);
     void Pause(); void Resume(); void Seek(double milliseconds); void Stop();
+}
+
+internal static class PlaybackTime
+{
+    public static string Format(double milliseconds)
+    {
+        var time = TimeSpan.FromMilliseconds(double.IsFinite(milliseconds) ? Math.Max(0, milliseconds) : 0);
+        return time.ToString(time.TotalHours >= 1 ? @"h\:mm\:ss" : @"mm\:ss");
+    }
+}
+
+internal static class AudioSourceLoader
+{
+    public static async Task<Stream> OpenAsync(HttpClient transfer, string source, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (File.Exists(source)) return File.OpenRead(source);
+
+        // Native players read their input synchronously. Finish all network reads
+        // asynchronously before handing the stream to the player on the UI thread.
+        await using var remote = await transfer.GetStreamAsync(source, ct).ConfigureAwait(false);
+        var buffered = new MemoryStream();
+        try
+        {
+            await remote.CopyToAsync(buffered, ct).ConfigureAwait(false);
+            buffered.Position = 0;
+            return buffered;
+        }
+        catch
+        {
+            buffered.Dispose();
+            throw;
+        }
+    }
 }
 
 #if ANDROID || IOS || MACCATALYST || WINDOWS
@@ -75,11 +115,29 @@ public sealed class AudioPlayerService(IAudioManager audioManager, HttpClient tr
 {
     private IAudioPlayer? _player; private Stream? _stream;
     public bool IsPlaying => _player?.IsPlaying == true;
+    public double PositionMs => (_player?.CurrentPosition ?? 0) * 1000d;
+    public double DurationMs => (_player?.Duration ?? 0) * 1000d;
+    public bool IsBuffering { get; private set; }
+    public double BufferedProgress => _player is null ? 0 : 1;
+    public string? PlaybackError => null;
+    public event EventHandler? PlaybackEnded;
     public async Task PlayAsync(string source, CancellationToken ct)
     {
         Stop();
-        _stream = File.Exists(source) ? File.OpenRead(source) : await transfer.GetStreamAsync(source, ct);
-        _player = audioManager.CreatePlayer(_stream); _player.Play();
+        IsBuffering = true;
+        try
+        {
+            _stream = await AudioSourceLoader.OpenAsync(transfer, source, ct);
+            _player = audioManager.CreatePlayer(_stream);
+            _player.PlaybackEnded += (_, _) => PlaybackEnded?.Invoke(this, EventArgs.Empty);
+            _player.Play();
+        }
+        catch
+        {
+            Stop();
+            throw;
+        }
+        finally { IsBuffering = false; }
     }
     public void Pause() => _player?.Pause(); public void Resume() => _player?.Play();
     public void Seek(double milliseconds) => _player?.Seek(milliseconds / 1000d);

@@ -72,8 +72,12 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IAsyncDelay, AsyncDelay>();
 		builder.Services.AddSingleton<IMusicDownloadService>(services => new MusicDownloadService(
 			services.GetRequiredService<IMusicApi>(), new HttpClient()));
+#if ANDROID
+		builder.Services.AddSingleton<IAudioPlayerService, Platforms.Android.StreamingAudioPlayer>();
+#else
 		builder.Services.AddSingleton<IAudioPlayerService>(services => new AudioPlayerService(
 			services.GetRequiredService<IAudioManager>(), new HttpClient()));
+#endif
 		builder.Services.AddTransient<MusicViewModel>();
 		builder.Services.AddTransient<MusicPage>();
 		builder.Services.AddSingleton<ISettingsApi, SettingsApi>();

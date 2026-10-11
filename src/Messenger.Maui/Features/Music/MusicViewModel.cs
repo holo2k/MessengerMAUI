@@ -32,7 +32,11 @@ public sealed class MusicViewModel(IMusicApi api, IMusicDownloadService download
     public async Task AddAsync(MusicTrackResponse track, CancellationToken ct = default) { await api.AddAsync(track.Id, ct); if (Library.All(x => x.Id != track.Id)) Library.Add(track); }
     public async Task RemoveAsync(MusicTrackResponse track, CancellationToken ct = default) { await api.RemoveAsync(track.Id, ct); var item = Library.FirstOrDefault(x => x.Id == track.Id); if (item is not null) Library.Remove(item); }
     public async Task UploadAsync(Guid audioId, string title, string artist, long duration, Guid? cover, CancellationToken ct = default)
-    { await api.CreateAsync(audioId, title, artist, duration, cover, ct); Status = "Трек отправлен на модерацию"; }
+    {
+        var track = await api.CreateAsync(audioId, title, artist, duration, cover, ct);
+        if (Library.All(x => x.Id != track.Id)) Library.Insert(0, track);
+        Status = "Трек загружен";
+    }
     public async Task DownloadAsync(MusicTrackResponse track, CancellationToken ct = default) { DownloadProgress = 0; await downloads.DownloadAsync(track, new InlineProgress(x => DownloadProgress = x), ct); }
     public Task RemoveDownloadAsync(MusicTrackResponse track) => downloads.RemoveAsync(track.Id);
     public async Task PlayAsync(MusicTrackResponse track, CancellationToken ct = default) { var auth = await api.AuthorizeAsync(track.Id, false, ct); await player.PlayAsync(auth.Url, ct); _currentTrack = track; OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(CurrentTrack)); OnPropertyChanged(nameof(HasCurrentTrack)); }

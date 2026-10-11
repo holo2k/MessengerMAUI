@@ -5,10 +5,9 @@ namespace Messenger.Domain.Tests.Music;
 public sealed class MusicStateTests
 {
     [Fact]
-    public void Track_can_be_approved_without_declaration_and_blocked_or_deleted()
+    public void New_track_is_available_without_approval_and_can_be_blocked_or_deleted()
     {
         var track = Track();
-        track.Approve(DateTimeOffset.UtcNow);
         Assert.Equal(MusicTrackStatus.Available, track.Status);
         Assert.Null(track.Declaration);
         Assert.Throws<MusicRuleException>(() => track.Approve(DateTimeOffset.UtcNow));

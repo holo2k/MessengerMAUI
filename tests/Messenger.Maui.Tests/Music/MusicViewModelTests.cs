@@ -17,7 +17,9 @@ public sealed class MusicViewModelTests
         await vm.UploadAsync(Guid.NewGuid(), "Новая", "Автор", 1000, null);
         Assert.Equal(1, api.SearchCalls); Assert.Equal(1, api.AddCalls); Assert.Equal(1, api.RemoveCalls); Assert.Equal(0, api.Declarations);
         Assert.Equal(1, api.CreateCalls);
-        Assert.Equal("Трек отправлен на модерацию", vm.Status);
+        Assert.Equal("Трек загружен", vm.Status);
+        Assert.Single(vm.Library);
+        Assert.Equal("available", vm.Library[0].Status);
     }
 
     [Fact]

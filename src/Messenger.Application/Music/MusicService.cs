@@ -13,6 +13,7 @@ public sealed class MusicService(IMusicStore store, IUploadService uploads, IClo
         if (coverObjectId is { } cover) await uploads.ValidateOwnedAvailableAsync(actorId, cover, ct);
         var track = new MusicTrack(Guid.NewGuid(), actorId, audioObjectId, title, artist, durationMs, coverObjectId, clock.UtcNow);
         await store.AddTrackAsync(track, ct);
+        await store.AddLibraryAsync(new UserMusicTrack(actorId, track.Id, clock.UtcNow), ct);
         await store.SaveChangesAsync(ct);
         return track;
     }

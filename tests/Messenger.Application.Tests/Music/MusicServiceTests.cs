@@ -13,8 +13,10 @@ public sealed class MusicServiceTests
     {
         var fixture = Fixture();
         var track = await fixture.Service.CreateAsync(fixture.User, Guid.NewGuid(), "Песня", "Автор", 1000, null);
-        await fixture.Service.DeclareRightsAsync(fixture.User, track.Id, "Права мои");
-        await fixture.Moderation.DecideAsync(fixture.Admin, track.Id, "approve", "ok");
+        Assert.Equal(MusicTrackStatus.Available, track.Status);
+        Assert.Null(track.Declaration);
+        Assert.Single(await fixture.Service.ListLibraryAsync(fixture.User));
+        await fixture.Service.AuthorizeStreamAsync(fixture.User, track.Id);
 
         await fixture.Service.AddToLibraryAsync(fixture.User, track.Id);
         await fixture.Service.AddToLibraryAsync(fixture.User, track.Id);
@@ -28,15 +30,13 @@ public sealed class MusicServiceTests
     {
         var fixture = Fixture();
         var track = await fixture.Service.CreateAsync(fixture.User, Guid.NewGuid(), "Песня", "Автор", 1000, null);
-        await fixture.Service.DeclareRightsAsync(fixture.User, track.Id, "Права мои");
-        await fixture.Moderation.DecideAsync(fixture.Admin, track.Id, "approve", "ok");
         await fixture.Service.AuthorizeStreamAsync(fixture.User, track.Id);
 
         await fixture.Moderation.DecideAsync(fixture.Admin, track.Id, "block", "Жалоба правообладателя");
 
         await Assert.ThrowsAsync<MusicRuleException>(() => fixture.Service.AuthorizeStreamAsync(fixture.User, track.Id));
         Assert.Equal(1, fixture.Uploads.AuthorizationCalls);
-        Assert.Equal(2, fixture.Store.Actions.Count);
+        Assert.Single(fixture.Store.Actions);
     }
 
     [Fact]

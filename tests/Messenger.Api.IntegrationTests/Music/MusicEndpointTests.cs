@@ -25,7 +25,7 @@ public sealed class MusicEndpointTests : IAsyncLifetime
     public async Task DisposeAsync() { await _minio.DisposeAsync(); await _postgres.DisposeAsync(); }
 
     [Fact]
-    public async Task Track_requires_admin_approval_without_declaration_then_block_revokes_new_stream_authorization()
+    public async Task Track_is_immediately_available_then_block_revokes_new_stream_authorization()
     {
         await using var factory = new MessengerApiFactory(_postgres.GetConnectionString(), "Development", 100, 100,
             _minio.GetConnectionString(), _minio.GetAccessKey(), _minio.GetSecretKey());
@@ -43,8 +43,9 @@ public sealed class MusicEndpointTests : IAsyncLifetime
         { put.Content.Headers.ContentType = new MediaTypeHeaderValue("audio/mpeg"); (await new HttpClient().SendAsync(put)).EnsureSuccessStatusCode(); }
         var stored = await PostAsync<StoredObjectResponse>(client, $"/api/uploads/{upload.Id}/complete", new { });
         var track = await PostAsync<MusicTrackResponse>(client, "/api/music/tracks", new CreateTrackRequest(stored.Id, "Трек", "Автор", 123000, null));
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/music/tracks/{track.Id}/stream")).StatusCode);
-        await SuccessAsync(client.PutAsJsonAsync($"/api/admin/music/tracks/{track.Id}", new ModerateTrackRequest("approve", "Проверено")));
+        Assert.Equal("available", track.Status);
+        Assert.Contains((await client.GetFromJsonAsync<MusicTrackResponse[]>("/api/music/library"))!, x => x.Id == track.Id);
+        Assert.Contains((await client.GetFromJsonAsync<MusicTrackResponse[]>("/api/music/search?query=Трек"))!, x => x.Id == track.Id);
         await SuccessAsync(client.PutAsync($"/api/music/library/{track.Id}", null));
         Assert.NotNull(await client.GetFromJsonAsync<DownloadAuthorizationResponse>($"/api/music/tracks/{track.Id}/stream"));
 
@@ -55,7 +56,7 @@ public sealed class MusicEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/music/tracks/{track.Id}/stream")).StatusCode);
         await using var auditScope = factory.Services.CreateAsyncScope();
-        Assert.Equal(2, await auditScope.ServiceProvider.GetRequiredService<MessengerDbContext>().ModerationActions.CountAsync());
+        Assert.Equal(1, await auditScope.ServiceProvider.GetRequiredService<MessengerDbContext>().ModerationActions.CountAsync());
     }
 
     private static async Task SuccessAsync(Task<HttpResponseMessage> request)

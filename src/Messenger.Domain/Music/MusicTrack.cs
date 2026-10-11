@@ -25,6 +25,7 @@ public sealed class MusicTrack : Entity
         Title = title.Trim();
         Artist = artist.Trim();
         DurationMs = durationMs;
+        Status = MusicTrackStatus.Available;
         CoverObjectId = coverObjectId;
         CreatedAt = createdAt;
     }

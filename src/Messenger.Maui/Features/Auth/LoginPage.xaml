@@ -1,24 +1,47 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="Messenger.Maui.Features.Auth.LoginPage"
-             Title="Вход">
-    <ScrollView>
-        <VerticalStackLayout Padding="24" Spacing="12" VerticalOptions="Center">
-            <Label Text="Вход в мессенджер" FontSize="26" FontAttributes="Bold" />
-            <Label Text="Пока SMS заменена тестовым кодом 111111." />
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                <Label Text="{Binding CountryCode}" FontSize="18" VerticalOptions="Center" />
-                <Entry Grid.Column="1" Placeholder="999 123-45-67" Keyboard="Telephone" Text="{Binding Phone}" />
-            </Grid>
-            <Button Text="Получить код" Clicked="OnRequestCodeClicked" />
-            <Entry Placeholder="Код из SMS или email" Keyboard="Numeric" Text="{Binding Code}" />
-            <Button Text="Войти" Clicked="OnLoginClicked" />
-            <Button Text="Подтвердить email-код"
-                    IsVisible="{Binding RequiresTwoFactor}"
-                    Clicked="OnConfirmTwoFactorClicked" />
-            <Button Text="Создать аккаунт" Clicked="OnOpenRegistrationClicked" />
-            <Label x:Name="StatusLabel" TextColor="DarkRed" />
-        </VerticalStackLayout>
-    </ScrollView>
+             xmlns:auth="clr-namespace:Messenger.Maui.Features.Auth"
+             x:Class="Messenger.Maui.Features.Auth.LoginPage" x:DataType="auth:LoginViewModel"
+             NavigationPage.HasNavigationBar="False" Title="Вход"
+             BackgroundColor="{StaticResource BarBackground}">
+    <Grid RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="80,*,80" HeightRequest="44" Padding="4,0">
+            <Button x:Name="BackButton" Text="" Clicked="OnBackClicked" IsVisible="False" />
+            <Label x:Name="HeaderTitle" Grid.Column="1" Text="Номер телефона" Style="{StaticResource NavigationTitle}" />
+            <Button x:Name="ContinueButton" Grid.Column="2" Text="Готово" FontAttributes="Bold" Clicked="OnContinueClicked" />
+        </Grid>
+        <ScrollView Grid.Row="1" BackgroundColor="White">
+            <VerticalStackLayout Spacing="0">
+                <VerticalStackLayout x:Name="PhonePanel" Spacing="0">
+                    <Label Text="Пожалуйста, выберите код страны и&#10;введите свой номер"
+                           HorizontalTextAlignment="Center" Margin="24,20,24,20" FontSize="16" />
+                    <BoxView Style="{StaticResource SeparatorLine}" />
+                    <Grid Padding="16,0" HeightRequest="44" ColumnDefinitions="*,24">
+                        <Label Text="Россия" TextColor="{StaticResource Primary}" VerticalOptions="Center" />
+                        <Image Grid.Column="1" Source="icon_chevron.png" HeightRequest="16" WidthRequest="16" />
+                    </Grid>
+                    <BoxView Style="{StaticResource SeparatorLine}" />
+                    <Grid ColumnDefinitions="86,1,*" Padding="0,0,16,0" HeightRequest="56">
+                        <Label Text="{Binding CountryCode}" FontSize="26" HorizontalTextAlignment="Center" VerticalOptions="Center" />
+                        <BoxView Grid.Column="1" Color="{StaticResource Separator}" />
+                        <Entry x:Name="PhoneEntry" Grid.Column="2" Margin="12,0,0,0" Text="{Binding Phone}" Placeholder="Номер телефона"
+                               FontSize="24" Keyboard="Telephone" ReturnType="Go" Completed="OnContinueClicked" />
+                    </Grid>
+                    <BoxView Style="{StaticResource SeparatorLine}" />
+                </VerticalStackLayout>
+                <VerticalStackLayout x:Name="CodePanel" IsVisible="False" Padding="24,28" Spacing="16">
+                    <Label x:Name="CodeHint" Text="Введите код, отправленный на ваш номер." HorizontalTextAlignment="Center" />
+                    <Border BackgroundColor="{StaticResource SearchBackground}" StrokeShape="RoundRectangle 10" Padding="16,4">
+                        <Entry x:Name="CodeEntry" Text="{Binding Code}" Placeholder="Код из SMS" Keyboard="Numeric" FontSize="26"
+                               HorizontalTextAlignment="Center" ReturnType="Go" Completed="OnContinueClicked" />
+                    </Border>
+                    <Button Text="Войти" Style="{StaticResource PrimaryButton}" Clicked="OnContinueClicked" />
+                    <Button Text="Отправить код повторно" Clicked="OnRequestCodeClicked" />
+                </VerticalStackLayout>
+                <Label x:Name="StatusLabel" TextColor="{StaticResource Danger}" FontSize="13" Margin="24,16" HorizontalTextAlignment="Center" />
+                <Button Text="Создать аккаунт" Clicked="OnOpenRegistrationClicked" HorizontalOptions="Center" Margin="0,12" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
 </ContentPage>

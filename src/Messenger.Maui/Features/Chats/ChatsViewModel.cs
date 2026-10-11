@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Messenger.Contracts.Chats;
 using Messenger.Contracts.Realtime;
 using Messenger.Maui.Services;
@@ -12,18 +13,24 @@ public enum ChatBulkAction
     Delete
 }
 
-public sealed class ChatListItem(ChatResponse chat, int unreadCount)
+public sealed class ChatListItem(ChatResponse chat, int unreadCount) : ObservableObject
 {
+    private int _unreadCount = unreadCount;
     public ChatResponse Chat { get; } = chat;
-    public int UnreadCount { get; private set; } = unreadCount;
+    public string Title => string.IsNullOrWhiteSpace(Chat.Title) ? "Личный чат" : Chat.Title;
+    public string Preview => Chat.CurrentMessageSequence == 0 ? "Пока нет сообщений" : Chat.Type == "group" ? "Групповой чат" : "Переписка";
+    public string DateText => Chat.UpdatedAt.ToLocalTime().ToString("dd.MM.yy");
+    public int UnreadCount { get => _unreadCount; private set => SetProperty(ref _unreadCount, value); }
     public void IncrementUnread() => UnreadCount++;
     public void MarkRead() => UnreadCount = 0;
 }
 
 public sealed class ChatsViewModel(IConversationApi api)
 {
+    private Guid? _selectedFolderId;
     public ObservableCollection<ChatFolderResponse> Folders { get; } = [];
     public ObservableCollection<ChatListItem> Chats { get; } = [];
+    public ObservableCollection<ChatListItem> VisibleChats { get; } = [];
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
@@ -36,6 +43,19 @@ public sealed class ChatsViewModel(IConversationApi api)
         foreach (var chat in await api.GetChatsAsync(cancellationToken))
         {
             Chats.Add(new ChatListItem(chat, 0));
+        }
+        SelectFolder(_selectedFolderId);
+    }
+
+    public void SelectFolder(Guid? folderId)
+    {
+        _selectedFolderId = folderId;
+        var folder = Folders.FirstOrDefault(value => value.Id == folderId);
+        VisibleChats.Clear();
+        foreach (var item in Chats.Where(item => !item.Chat.IsHidden && !item.Chat.IsArchived &&
+                     (folder is null || folder.ChatIds.Contains(item.Chat.Id))).OrderByDescending(item => item.Chat.UpdatedAt))
+        {
+            VisibleChats.Add(item);
         }
     }
 

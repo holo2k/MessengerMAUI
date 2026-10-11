@@ -53,6 +53,13 @@ public sealed class ChatSyncService(
             ? ReconcileAsync()
             : Task.CompletedTask;
 
+    public void Stop()
+    {
+        realtime.MessageCreated -= OnMessageCreatedAsync;
+        realtime.Reconnected -= OnReconnectedAsync;
+        realtime.ConnectionStateChanged -= OnConnectionStateChanged;
+    }
+
     private Task OnReconnectedAsync() => ReconcileAsync();
 
     private void OnConnectionStateChanged(ChatConnectionState state) => ConnectionStateChanged?.Invoke(state);

@@ -73,6 +73,47 @@ public sealed class ChatSyncAndViewModelTests
     }
 
     [Fact]
+    public async Task Folder_selection_excludes_archived_and_hidden_chats_and_restores_all_active_chats()
+    {
+        var api = new FakeConversationApi();
+        var first = Chat(Guid.NewGuid()) with { UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-1) };
+        var second = Chat(Guid.NewGuid());
+        var archived = Chat(Guid.NewGuid()) with { IsArchived = true };
+        var hidden = Chat(Guid.NewGuid()) with { IsHidden = true };
+        api.ChatRows.AddRange([first, second, archived, hidden]);
+        var folder = new ChatFolderResponse(Guid.NewGuid(), "Работа", 0, [first.Id, archived.Id, hidden.Id]);
+        api.FolderRows.Add(folder);
+        var viewModel = new ChatsViewModel(api);
+
+        await viewModel.LoadAsync();
+        Assert.Equal([second.Id, first.Id], viewModel.VisibleChats.Select(item => item.Chat.Id));
+        viewModel.SelectFolder(folder.Id);
+        Assert.Equal(first.Id, Assert.Single(viewModel.VisibleChats).Chat.Id);
+        viewModel.SelectFolder(null);
+        Assert.Equal(2, viewModel.VisibleChats.Count);
+    }
+
+    [Fact]
+    public async Task Leaving_a_chat_unsubscribes_from_realtime_messages()
+    {
+        var chatId = Guid.NewGuid();
+        var api = new FakeConversationApi();
+        var realtime = new FakeRealtimeClient();
+        var sync = new ChatSyncService(api, realtime, new MemoryCursorStore());
+        var received = new List<long>();
+        sync.MessageReceived += message => { received.Add(message.Sequence); return Task.CompletedTask; };
+        await sync.StartAsync(chatId);
+        sync.Stop();
+        api.Messages.Add(Message(chatId, 1));
+
+        await realtime.EmitAsync(new MessageCreatedEvent(chatId, api.Messages[0].Id, 1));
+
+        Assert.Empty(received);
+        await sync.StartAsync(chatId);
+        Assert.Equal([1L], received);
+    }
+
+    [Fact]
     public async Task Composer_is_preserved_on_failure_and_search_and_pins_update_results()
     {
         var api = new FakeConversationApi { SendFailure = new HttpRequestException("offline") };
@@ -153,6 +194,8 @@ public sealed class ChatSyncAndViewModelTests
 
     private sealed class FakeConversationApi : IConversationApi
     {
+        public List<ChatResponse> ChatRows { get; } = [];
+        public List<ChatFolderResponse> FolderRows { get; } = [];
         public List<MessageResponse> Messages { get; } = [];
         public List<MessageResponse> SearchResults { get; } = [];
         public List<MessageResponse> PinResults { get; } = [];
@@ -163,8 +206,8 @@ public sealed class ChatSyncAndViewModelTests
         public Exception? SendFailure { get; set; }
         public UpdateContactRequest? LastContactUpdate { get; private set; }
 
-        public Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatResponse>>([]);
-        public Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatFolderResponse>>([]);
+        public Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatResponse>>(ChatRows);
+        public Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatFolderResponse>>(FolderRows);
         public Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ContactResponse>>([]);
         public Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<UserSearchResponse>>([]);
 

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:media="clr-namespace:Messenger.Contracts.Media;assembly=Messenger.Contracts"
+             x:Class="Messenger.Maui.Features.Chats.SharedMediaPage" Title="Медиа" Shell.NavBarIsVisible="False"
+             Shell.TabBarIsVisible="False" BackgroundColor="{StaticResource PageBackground}">
+    <Grid RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="80,*,80" HeightRequest="44" BackgroundColor="{StaticResource BarBackground}">
+            <Button Text="Назад" Clicked="OnBackClicked" />
+            <Label Grid.Column="1" Text="Медиа" Style="{StaticResource NavigationTitle}" />
+        </Grid>
+        <CollectionView x:Name="MediaList" Grid.Row="1" Margin="1">
+            <CollectionView.ItemsLayout><GridItemsLayout Orientation="Vertical" Span="3" HorizontalItemSpacing="1" VerticalItemSpacing="1" /></CollectionView.ItemsLayout>
+            <CollectionView.EmptyView><Label Text="В чате пока нет медиа" TextColor="{StaticResource TextSecondary}" HorizontalTextAlignment="Center" Margin="24,60" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="media:StoredObjectResponse">
+                    <Grid RowDefinitions="*,Auto,Auto" BackgroundColor="White" Padding="10" HeightRequest="120" RowSpacing="4">
+                        <Image Source="icon_file.png" HeightRequest="36" WidthRequest="36" />
+                        <Label Grid.Row="1" Text="{Binding FileName}" FontSize="12" MaxLines="2" LineBreakMode="TailTruncation" />
+                        <Label Grid.Row="2" Text="{Binding ContentType}" FontSize="10" TextColor="{StaticResource TextSecondary}" LineBreakMode="TailTruncation" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

@@ -12,7 +12,7 @@
                     <ImageButton Grid.Column="1" Source="icon_search.png" Clicked="OnSearchClicked" WidthRequest="36" HeightRequest="36" SemanticProperties.Description="Найти музыку" />
                 </Grid>
             </Border>
-            <Button Grid.Column="1" Text="Загрузить" Clicked="OnUploadClicked" />
+            <Button x:Name="UploadButton" Grid.Column="1" Text="Загрузить" Clicked="OnUploadClicked" />
         </Grid>
         <Label Grid.Row="1" Text="{Binding Status}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="16,4"
                IsVisible="{Binding Status, Converter={StaticResource DisplayValue}, ConverterParameter=notEmpty}" />

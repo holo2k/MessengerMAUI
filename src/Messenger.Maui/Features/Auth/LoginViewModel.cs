@@ -39,6 +39,9 @@ public sealed class LoginViewModel(
         var challenge = await authApi.RequestChallengeAsync(
             new ChallengeRequest(RussianPhoneNumber.Compose(Phone), "RU", "login"), cancellationToken);
         ChallengeId = challenge.ChallengeId;
+        PendingTwoFactorToken = null;
+        Code = string.Empty;
+        OnPropertyChanged(nameof(RequiresTwoFactor));
     }
 
     public async Task LoginAsync(CancellationToken cancellationToken = default)

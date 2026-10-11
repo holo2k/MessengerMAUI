@@ -10,23 +10,47 @@ public partial class RegistrationPage : ContentPage
         BindingContext = _viewModel = viewModel;
     }
 
-    private async void OnRequestCodeClicked(object? sender, EventArgs e) =>
-        await RunAsync(_viewModel.RequestCodeAsync, "Код отправлен. Для разработки: 111111.");
-
-    private async void OnRegisterClicked(object? sender, EventArgs e) =>
-        await RunAsync(_viewModel.RegisterAsync);
-
-    private async Task RunAsync(Func<CancellationToken, Task> action, string? success = null)
+    private async void OnContinueClicked(object? sender, EventArgs e)
     {
+        if (CodePanel.IsVisible) await RunAsync(_viewModel.RegisterAsync);
+        else await RequestCodeAsync();
+    }
+
+    private async void OnRequestCodeClicked(object? sender, EventArgs e) => await RequestCodeAsync();
+
+    private async Task RequestCodeAsync()
+    {
+        if (!await RunAsync(_viewModel.RequestCodeAsync)) return;
+        PhonePanel.IsVisible = false;
+        CodePanel.IsVisible = true;
+        HeaderTitle.Text = "Код подтверждения";
+        CodeHint.Text = $"Код отправлен на +7 {_viewModel.Phone}";
+        CodeEntry.Focus();
+    }
+
+    private async void OnBackClicked(object? sender, EventArgs e)
+    {
+        if (CodePanel.IsVisible)
+        {
+            PhonePanel.IsVisible = true;
+            CodePanel.IsVisible = false;
+            HeaderTitle.Text = "Номер телефона";
+            StatusLabel.Text = string.Empty;
+        }
+        else await Navigation.PopAsync();
+    }
+
+    private async Task<bool> RunAsync(Func<CancellationToken, Task> action)
+    {
+        if (!ContinueButton.IsEnabled) return false;
         try
         {
+            ContinueButton.IsEnabled = false;
             StatusLabel.Text = string.Empty;
             await action(CancellationToken.None);
-            StatusLabel.Text = success ?? string.Empty;
+            return true;
         }
-        catch (Exception exception)
-        {
-            StatusLabel.Text = exception.Message;
-        }
+        catch (Exception exception) { StatusLabel.Text = exception.Message; return false; }
+        finally { ContinueButton.IsEnabled = true; }
     }
 }

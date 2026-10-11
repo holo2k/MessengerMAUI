@@ -1,4 +1,5 @@
 using Messenger.Contracts.Auth;
+using Messenger.Contracts.Users;
 using Messenger.Maui.Features.Auth;
 using Messenger.Maui.Services;
 
@@ -73,6 +74,26 @@ public sealed class AuthViewModelTests
         Assert.Equal(1, navigation.AuthenticatedCount);
     }
 
+    [Fact]
+    public async Task Returning_to_phone_entry_starts_a_new_login_without_the_previous_email_challenge()
+    {
+        var api = new RecordingAuthApi
+        {
+            PendingTwoFactor = new PendingTwoFactorResponse(true, "old-pending-token", DateTimeOffset.UtcNow.AddMinutes(5))
+        };
+        var viewModel = new LoginViewModel(api, new MemorySessionStore(), new RecordingNavigation()) { Phone = "9991234567" };
+        await viewModel.RequestCodeAsync();
+        viewModel.Code = "111111";
+        await viewModel.LoginAsync();
+        Assert.True(viewModel.RequiresTwoFactor);
+
+        await viewModel.RequestCodeAsync();
+
+        Assert.False(viewModel.RequiresTwoFactor);
+        Assert.Null(viewModel.PendingTwoFactorToken);
+        Assert.Empty(viewModel.Code);
+    }
+
     internal sealed class RecordingAuthApi : IAuthApi
     {
         public ChallengeResponse Challenge { get; } = new(Guid.NewGuid(), DateTimeOffset.UtcNow.AddMinutes(5));
@@ -81,6 +102,7 @@ public sealed class AuthViewModelTests
         public int RefreshCount => _refreshCount;
         public Exception? RefreshFailure { get; set; }
         public TimeSpan RefreshDelay { get; set; }
+        public PendingTwoFactorResponse? PendingTwoFactor { get; set; }
 
         public Task<ChallengeResponse> RequestChallengeAsync(ChallengeRequest request, CancellationToken cancellationToken = default)
         {
@@ -92,7 +114,7 @@ public sealed class AuthViewModelTests
             Task.FromResult(Session);
 
         public Task<AuthLoginResult> LoginAsync(CompleteChallengeRequest request, CancellationToken cancellationToken = default) =>
-            Task.FromResult(AuthLoginResult.Authenticated(Session));
+            Task.FromResult(PendingTwoFactor is { } pending ? AuthLoginResult.RequiresTwoFactor(pending) : AuthLoginResult.Authenticated(Session));
 
         public Task<AuthSessionResponse> ConfirmTwoFactorAsync(string pendingToken, string code, CancellationToken cancellationToken = default) =>
             Task.FromResult(Session);

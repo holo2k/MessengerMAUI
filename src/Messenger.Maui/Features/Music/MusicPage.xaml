@@ -1,26 +1,58 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="Messenger.Maui.Features.Music.MusicPage" Title="Музыка">
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="12" RowSpacing="8">
-        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-            <Entry Text="{Binding SearchText}" Placeholder="Поиск по библиотеке" />
-            <Button Grid.Column="1" Text="Найти" Clicked="OnSearchClicked" />
-            <Button Grid.Column="2" Text="Загрузить" Clicked="OnUploadClicked" />
-        </Grid>
-        <Label Grid.Row="1" Text="{Binding Status}" TextColor="Gray" />
-        <CollectionView Grid.Row="2" ItemsSource="{Binding SearchResults}" SelectionMode="Single" SelectionChanged="OnTrackSelected">
-            <CollectionView.ItemTemplate><DataTemplate>
-                <Grid ColumnDefinitions="*,Auto,Auto" Padding="6">
-                    <VerticalStackLayout><Label Text="{Binding Title}" FontAttributes="Bold"/><Label Text="{Binding Artist}"/></VerticalStackLayout>
-                    <Button Grid.Column="1" Text="+" Clicked="OnAddClicked" CommandParameter="{Binding .}" />
-                    <Button Grid.Column="2" Text="↓" Clicked="OnDownloadClicked" CommandParameter="{Binding .}" />
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:music="clr-namespace:Messenger.Maui.Features.Music"
+             xmlns:contracts="clr-namespace:Messenger.Contracts.Music;assembly=Messenger.Contracts"
+             xmlns:ui="clr-namespace:Messenger.Maui.Controls" x:Class="Messenger.Maui.Features.Music.MusicPage"
+             x:Name="MusicScreen" x:DataType="music:MusicViewModel" Title="Музыка" Shell.NavBarIsVisible="False">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <Grid ColumnDefinitions="*,Auto" Padding="12,6,4,6" BackgroundColor="{StaticResource BarBackground}">
+            <Border Style="{StaticResource SearchField}">
+                <Grid ColumnDefinitions="*,36">
+                    <Entry Text="{Binding SearchText}" Placeholder="Поиск музыки" ReturnType="Search" Completed="OnSearchClicked" TextChanged="OnSearchTextChanged" MinimumHeightRequest="36" />
+                    <ImageButton Grid.Column="1" Source="icon_search.png" Clicked="OnSearchClicked" WidthRequest="36" HeightRequest="36" SemanticProperties.Description="Найти музыку" />
                 </Grid>
-            </DataTemplate></CollectionView.ItemTemplate>
+            </Border>
+            <Button Grid.Column="1" Text="Загрузить" Clicked="OnUploadClicked" />
+        </Grid>
+        <Label Grid.Row="1" Text="{Binding Status}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="16,4"
+               IsVisible="{Binding Status, Converter={StaticResource DisplayValue}, ConverterParameter=notEmpty}" />
+        <CollectionView x:Name="TracksList" Grid.Row="2" ItemsSource="{Binding Library}" SelectionMode="Single" SelectionChanged="OnTrackSelected">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout Padding="32,70" Spacing="12">
+                    <Image Source="icon_music.png" HeightRequest="44" WidthRequest="44" Opacity="0.45" />
+                    <Label x:Name="EmptyMusicLabel" Text="Ваша музыка" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                    <Label Text="Найдите любимые треки или загрузите свою музыку." Style="{StaticResource SecondaryLabel}" HorizontalTextAlignment="Center" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="contracts:MusicTrackResponse">
+                    <Grid ColumnDefinitions="40,*,Auto,Auto,44" RowDefinitions="*,1" Padding="16,8,4,0" ColumnSpacing="8" MinimumHeightRequest="56">
+                        <ui:AvatarView Person="{Binding Title}" HeightRequest="38" WidthRequest="38" Margin="0,0,0,8" />
+                        <Label Grid.Column="1" FontSize="14" VerticalOptions="Center" LineBreakMode="TailTruncation" Margin="0,0,0,8">
+                            <Label.FormattedText><FormattedString>
+                                <Span Text="{Binding Artist}" /><Span Text=" – " /><Span Text="{Binding Title}" />
+                            </FormattedString></Label.FormattedText>
+                        </Label>
+                        <Label Grid.Column="2" Text="{Binding DurationMs, Converter={StaticResource DisplayValue}, ConverterParameter=duration}" FontSize="13" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" Margin="0,0,0,8" />
+                        <ImageButton Grid.Column="3" Source="icon_plus.png" CommandParameter="{Binding .}" Clicked="OnAddClicked" SemanticProperties.Description="Добавить в мою музыку"
+                                     IsVisible="{Binding Source={x:Reference MusicScreen}, Path=IsSearching, x:DataType=music:MusicPage}" />
+                        <ImageButton Grid.Column="4" Source="icon_download.png" CommandParameter="{Binding .}" Clicked="OnDownloadClicked" SemanticProperties.Description="Скачать трек" />
+                        <BoxView Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4" Style="{StaticResource SeparatorLine}" />
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
         </CollectionView>
-        <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Padding="8" BackgroundColor="#EEEEEE">
-            <VerticalStackLayout><Label Text="Мини-плеер" FontAttributes="Bold"/><Label Text="{Binding PositionText}"/><ProgressBar Progress="{Binding DownloadProgress}"/></VerticalStackLayout>
-            <Button Grid.Column="1" Text="Пауза / Старт" Clicked="OnPauseClicked" />
+        <Grid Grid.Row="3" RowDefinitions="2,Auto" BackgroundColor="{StaticResource PlayerBackground}" IsVisible="{Binding HasCurrentTrack}">
+            <ProgressBar Progress="{Binding DownloadProgress}" HeightRequest="2" />
+            <Grid Grid.Row="1" ColumnDefinitions="40,44,*,44" Padding="12,8" ColumnSpacing="8">
+                <ui:AvatarView Person="{Binding CurrentTrack.Title}" WidthRequest="38" HeightRequest="38" />
+                <Label Grid.Column="1" Text="{Binding PositionText}" FontSize="10" TextColor="White" VerticalOptions="Start" HorizontalTextAlignment="Center" />
+                <VerticalStackLayout Grid.Column="2" Spacing="2" VerticalOptions="Center">
+                    <Label Text="{Binding CurrentTrack.Title}" TextColor="White" FontSize="13" LineBreakMode="TailTruncation" />
+                    <Label Text="{Binding CurrentTrack.Artist}" TextColor="#A3B8BD" FontSize="10" LineBreakMode="TailTruncation" />
+                </VerticalStackLayout>
+                <ImageButton Grid.Column="3" Source="{Binding IsPlaying, Converter={StaticResource DisplayValue}, ConverterParameter=playIcon}" Clicked="OnPauseClicked" SemanticProperties.Description="Пауза или воспроизведение" />
+            </Grid>
         </Grid>
     </Grid>
 </ContentPage>

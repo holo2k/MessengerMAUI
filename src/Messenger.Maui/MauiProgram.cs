@@ -84,6 +84,19 @@ public static class MauiProgram
 		builder.Services.AddTransient<ChatsPage>();
 		builder.Services.AddTransient<ContactsPage>();
 
+#if ANDROID
+        Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("MessengerEntry", (handler, _) =>
+        {
+            handler.PlatformView.BackgroundTintList = Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
+            handler.PlatformView.SetPadding(0, 0, 0, 0);
+        });
+        Microsoft.Maui.Handlers.EditorHandler.Mapper.AppendToMapping("MessengerEditor", (handler, _) =>
+        {
+            handler.PlatformView.BackgroundTintList = Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
+            handler.PlatformView.SetPadding(0, 8, 0, 8);
+        });
+#endif
+
 		return builder.Build();
 	}
 }

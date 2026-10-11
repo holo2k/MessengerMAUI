@@ -79,12 +79,21 @@ public sealed class UploadClient(HttpClient httpClient, HttpClient transferClien
         return signedUri;
     }
 
-    private sealed class ProgressByteArrayContent(byte[] bytes, string contentType, IProgress<double>? progress) : HttpContent
+    private sealed class ProgressByteArrayContent : HttpContent
     {
+        private readonly byte[] bytes;
+        private readonly IProgress<double>? progress;
+
+        public ProgressByteArrayContent(byte[] bytes, string contentType, IProgress<double>? progress)
+        {
+            this.bytes = bytes;
+            this.progress = progress;
+            Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        }
+
         protected override bool TryComputeLength(out long length) { length = bytes.LongLength; return true; }
         protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context)
         {
-            Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
             const int block = 64 * 1024;
             var written = 0;
             while (written < bytes.Length)

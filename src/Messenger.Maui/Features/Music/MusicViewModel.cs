@@ -17,6 +17,8 @@ public sealed class MusicViewModel(IMusicApi api, IMusicDownloadService download
     public string Status { get => _status; private set => SetProperty(ref _status, value); }
     public double DownloadProgress { get => _downloadProgress; private set => SetProperty(ref _downloadProgress, value); }
     public bool IsPlaying => player.IsPlaying;
+    public MusicTrackResponse? CurrentTrack => _currentTrack;
+    public bool HasCurrentTrack => _currentTrack is not null;
     public string PositionText => TimeSpan.FromMilliseconds(_positionMs).ToString(@"mm\:ss");
 
     public async Task SearchAsync(CancellationToken ct = default)
@@ -33,9 +35,9 @@ public sealed class MusicViewModel(IMusicApi api, IMusicDownloadService download
     { if (!rightsConfirmed) throw new InvalidOperationException("Нужно подтвердить наличие прав на трек."); var track = await api.CreateAsync(audioId, title, artist, duration, cover, ct); await api.DeclareAsync(track.Id, "Подтверждаю, что обладаю необходимыми правами на публикацию трека.", ct); Status = "Трек отправлен на модерацию"; }
     public async Task DownloadAsync(MusicTrackResponse track, CancellationToken ct = default) { DownloadProgress = 0; await downloads.DownloadAsync(track, new InlineProgress(x => DownloadProgress = x), ct); }
     public Task RemoveDownloadAsync(MusicTrackResponse track) => downloads.RemoveAsync(track.Id);
-    public async Task PlayAsync(MusicTrackResponse track, CancellationToken ct = default) { var auth = await api.AuthorizeAsync(track.Id, false, ct); await player.PlayAsync(auth.Url, ct); _currentTrack = track; OnPropertyChanged(nameof(IsPlaying)); }
+    public async Task PlayAsync(MusicTrackResponse track, CancellationToken ct = default) { var auth = await api.AuthorizeAsync(track.Id, false, ct); await player.PlayAsync(auth.Url, ct); _currentTrack = track; OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(CurrentTrack)); OnPropertyChanged(nameof(HasCurrentTrack)); }
     public void TogglePause() { if (player.IsPlaying) player.Pause(); else player.Resume(); OnPropertyChanged(nameof(IsPlaying)); }
     public void Seek(double milliseconds) { _positionMs = milliseconds; player.Seek(milliseconds); OnPropertyChanged(nameof(PositionText)); }
-    public async Task OnTrackBlockedAsync(Guid trackId, string reason) { if (_currentTrack?.Id == trackId) { player.Stop(); _currentTrack = null; OnPropertyChanged(nameof(IsPlaying)); } await downloads.InvalidateAsync(trackId); Status = reason; }
+    public async Task OnTrackBlockedAsync(Guid trackId, string reason) { if (_currentTrack?.Id == trackId) { player.Stop(); _currentTrack = null; OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(CurrentTrack)); OnPropertyChanged(nameof(HasCurrentTrack)); } await downloads.InvalidateAsync(trackId); Status = reason; }
     private sealed class InlineProgress(Action<double> action) : IProgress<double> { public void Report(double value) => action(value); }
 }

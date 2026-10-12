@@ -126,6 +126,33 @@ public sealed class MessageEndpointTests : IAsyncLifetime
             $"/api/messages/{message.Id}", new EditMessageRequest("Украдено"))).StatusCode);
     }
 
+    [Fact]
+    public async Task Incoming_message_restores_hidden_dialog_without_creating_duplicate_chat()
+    {
+        await using var factory = await CreateFactoryAsync();
+        var client = factory.CreateClient();
+        var sender = await RegisterAsync(client, "+79990000431");
+        var recipient = await RegisterAsync(client, "+79990000432");
+        Authorize(client, sender);
+        var chat = await PostAsync<ChatResponse>(
+            client, "/api/chats/direct", new CreateDirectChatRequest(recipient.UserId));
+
+        Authorize(client, recipient);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/chats/{chat.Id}")).StatusCode);
+        Assert.Empty((await client.GetFromJsonAsync<ChatPageResponse>("/api/chats?limit=100"))!.Items);
+
+        Authorize(client, sender);
+        var sent = await PostAsync<MessageResponse>(client, $"/api/chats/{chat.Id}/messages",
+            new SendMessageRequest(Guid.NewGuid(), "text", "Диалог возвращён"));
+
+        Authorize(client, recipient);
+        var page = await client.GetFromJsonAsync<ChatPageResponse>("/api/chats?limit=100");
+        var restored = Assert.Single(page!.Items);
+        Assert.Equal(chat.Id, restored.Id);
+        Assert.Equal(sent.Id, restored.LastMessage?.Id);
+        Assert.Equal("Диалог возвращён", restored.LastMessage?.Body);
+    }
+
     private async Task<MessengerApiFactory> CreateFactoryAsync()
     {
         var factory = new MessengerApiFactory(_postgres.GetConnectionString(), "Development", 100, 100);

@@ -73,20 +73,54 @@ public sealed class MessageServiceTests
         Assert.Single(fixture.Store.Pins);
     }
 
+    [Fact]
+    public async Task Direct_message_reactivates_hidden_recipient_before_save()
+    {
+        var fixture = new Fixture(ChatType.Direct);
+        var recipient = fixture.Store.Members.Single(member => member.UserId == fixture.OtherUserId);
+        recipient.Hide(Fixture.Now);
+
+        await fixture.Service.SendAsync(
+            fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Text, "Возвращает диалог");
+
+        Assert.Null(recipient.HiddenAt);
+    }
+
+    [Fact]
+    public async Task Group_message_does_not_reactivate_members_who_left()
+    {
+        var fixture = new Fixture();
+        var member = new ChatMember(fixture.Chat.Id, fixture.OtherUserId, ChatMemberRole.Member, Fixture.Now);
+        fixture.Store.Members.Add(member);
+        member.Leave(fixture.Store.Members, Fixture.Now.AddMinutes(1));
+
+        await fixture.Service.SendAsync(
+            fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Text, "Групповое сообщение");
+
+        Assert.Equal(Fixture.Now.AddMinutes(1), member.LeftAt);
+    }
+
     private sealed class Fixture
     {
         public static readonly DateTimeOffset Now = new(2026, 10, 3, 8, 0, 0, TimeSpan.Zero);
 
-        public Fixture()
+        public Fixture(ChatType type = ChatType.Group)
         {
             UserId = Guid.NewGuid();
-            Chat = new Chat(Guid.NewGuid(), ChatType.Group, UserId, "Группа", Now);
+            OtherUserId = Guid.NewGuid();
+            Chat = new Chat(Guid.NewGuid(), type, UserId, type == ChatType.Group ? "Группа" : null, Now);
             Store.Chats.Add(Chat);
-            Store.Members.Add(new ChatMember(Chat.Id, UserId, ChatMemberRole.Owner, Now));
+            Store.Members.Add(new ChatMember(
+                Chat.Id, UserId, type == ChatType.Group ? ChatMemberRole.Owner : ChatMemberRole.Member, Now));
+            if (type == ChatType.Direct)
+            {
+                Store.Members.Add(new ChatMember(Chat.Id, OtherUserId, ChatMemberRole.Member, Now));
+            }
             Service = new MessageService(Store, Store, Cipher, new TestIndex(), new Clock());
         }
 
         public Guid UserId { get; }
+        public Guid OtherUserId { get; }
         public Chat Chat { get; }
         public MemoryMessageStore Store { get; } = new();
         public TestCipher Cipher { get; } = new();

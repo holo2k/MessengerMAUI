@@ -51,5 +51,4 @@ public interface IChatService
     Task SetArchivedAsync(Guid requesterUserId, Guid chatId, bool value, CancellationToken cancellationToken = default);
     Task SetMutedAsync(Guid requesterUserId, Guid chatId, bool value, CancellationToken cancellationToken = default);
     Task MarkReadAsync(Guid requesterUserId, Guid chatId, long sequence, CancellationToken cancellationToken = default);
-    Task ReactivateDirectMembersAsync(Guid chatId, Guid senderUserId, CancellationToken cancellationToken = default);
 }

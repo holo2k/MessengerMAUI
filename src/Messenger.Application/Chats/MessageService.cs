@@ -39,6 +39,16 @@ public sealed partial class MessageService(
             Guid.NewGuid(), chatId, senderUserId, chat.NextMessageSequence(clock.UtcNow), clientMessageId,
             kind, encrypted.Ciphertext, encrypted.Nonce, encrypted.Tag, encrypted.KeyVersion, clock.UtcNow);
         await messageStore.AddMessageAsync(message, SearchTokens(message.Id, normalizedBody), cancellationToken);
+        if (chat.Type == ChatType.Direct)
+        {
+            foreach (var member in await chatStore.ListMembersAsync(chatId, cancellationToken))
+            {
+                if (member.UserId != senderUserId && member.IsActive)
+                {
+                    member.Reactivate();
+                }
+            }
+        }
         await chatStore.SaveChangesAsync(cancellationToken);
         return new MessageView(message, normalizedBody, false);
     }

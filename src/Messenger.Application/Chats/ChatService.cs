@@ -247,26 +247,6 @@ public sealed class ChatService(IChatStore store, IClock clock, IChatSummaryRead
         await store.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task ReactivateDirectMembersAsync(
-        Guid chatId,
-        Guid senderUserId,
-        CancellationToken cancellationToken = default)
-    {
-        var chat = await store.FindChatAsync(chatId, cancellationToken);
-        if (chat?.Type != ChatType.Direct)
-        {
-            return;
-        }
-        foreach (var member in await store.ListMembersAsync(chatId, cancellationToken))
-        {
-            if (member.UserId != senderUserId)
-            {
-                member.Reactivate();
-            }
-        }
-        await store.SaveChangesAsync(cancellationToken);
-    }
-
     private static string EncodeCursor(Chat chat) => Convert.ToBase64String(
         System.Text.Encoding.UTF8.GetBytes($"{chat.UpdatedAt.UtcTicks}|{chat.Id:D}"));
 

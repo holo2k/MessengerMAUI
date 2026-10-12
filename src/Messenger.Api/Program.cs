@@ -60,6 +60,7 @@ builder.Services.AddScoped<EfSocialStore>();
 builder.Services.AddScoped<IContactStore>(serviceProvider => serviceProvider.GetRequiredService<EfSocialStore>());
 builder.Services.AddScoped<IChatStore>(serviceProvider => serviceProvider.GetRequiredService<EfSocialStore>());
 builder.Services.AddScoped<IChatFolderStore>(serviceProvider => serviceProvider.GetRequiredService<EfSocialStore>());
+builder.Services.AddScoped<IChatSummaryReader, EfChatSummaryReader>();
 builder.Services.AddScoped<IContactService, ContactService>();
 builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.AddScoped<IChatFolderService, ChatFolderService>();

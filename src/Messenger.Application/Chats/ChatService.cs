@@ -3,7 +3,7 @@ using Messenger.Domain.Common;
 
 namespace Messenger.Application.Chats;
 
-public sealed class ChatService(IChatStore store, IClock clock) : IChatService
+public sealed class ChatService(IChatStore store, IClock clock, IChatSummaryReader? summaries = null) : IChatService
 {
     public async Task<Chat> CreateDirectAsync(
         Guid requesterUserId,
@@ -73,6 +73,12 @@ public sealed class ChatService(IChatStore store, IClock clock) : IChatService
         Guid chatId,
         CancellationToken cancellationToken = default)
     {
+        if (summaries is not null)
+        {
+            return await summaries.GetAsync(requesterUserId, chatId, cancellationToken)
+                ?? throw new ChatRuleException(ChatRuleError.NotFound);
+        }
+
         var chat = await store.FindChatAsync(chatId, cancellationToken);
         var member = await store.FindMemberAsync(chatId, requesterUserId, cancellationToken);
         if (chat is null || chat.DeletedAt is not null || member is null || !member.IsActive)
@@ -82,7 +88,7 @@ public sealed class ChatService(IChatStore store, IClock clock) : IChatService
         return new ChatView(chat, member);
     }
 
-    public async Task<ChatPage> ListAsync(
+    public async Task<ChatSummaryPage> ListAsync(
         Guid requesterUserId,
         string? cursor,
         int limit,
@@ -90,10 +96,21 @@ public sealed class ChatService(IChatStore store, IClock clock) : IChatService
     {
         limit = Math.Clamp(limit, 1, 100);
         var (updatedAt, id) = DecodeCursor(cursor);
+        if (summaries is not null)
+        {
+            var summariesPage = await summaries.ListAsync(
+                requesterUserId, updatedAt, id, limit + 1, cancellationToken);
+            var summariesHaveMore = summariesPage.Count > limit;
+            var summariesItems = summariesPage.Take(limit).ToArray();
+            return new ChatSummaryPage(
+                summariesItems,
+                summariesHaveMore ? EncodeCursor(summariesItems[^1].Chat) : null);
+        }
+
         var rows = await store.ListChatsAsync(requesterUserId, updatedAt, id, limit + 1, cancellationToken);
         var hasMore = rows.Count > limit;
         var page = rows.Take(limit).Select(row => new ChatView(row.Chat, row.Member)).ToArray();
-        return new ChatPage(page, hasMore ? EncodeCursor(page[^1].Chat) : null);
+        return new ChatSummaryPage(page, hasMore ? EncodeCursor(page[^1].Chat) : null);
     }
 
     public async Task UpdateGroupAsync(

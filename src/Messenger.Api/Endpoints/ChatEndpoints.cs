@@ -145,7 +145,16 @@ public static class ChatEndpoints
         view.Member.IsArchived,
         view.Member.HiddenAt is not null,
         view.Chat.CurrentMessageSequence,
-        view.Chat.UpdatedAt);
+        view.Chat.UpdatedAt,
+        view.Peer is null ? null : new ChatPeerResponse(
+            view.Peer.UserId, view.Peer.DisplayName, view.Peer.AvatarObjectId),
+        view.LastMessage is null ? null : new ChatLastMessageResponse(
+            view.LastMessage.Id,
+            view.LastMessage.SenderUserId,
+            view.LastMessage.Kind.ToString().ToLowerInvariant(),
+            view.LastMessage.Body,
+            view.LastMessage.CreatedAt,
+            view.LastMessage.DeletedAt));
 
     private static string Role(ChatMemberRole role) => role.ToString().ToLowerInvariant();
     private static ChatMemberRole ParseRole(string role) => role.ToLowerInvariant() switch

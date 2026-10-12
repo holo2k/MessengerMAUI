@@ -9,6 +9,21 @@ namespace Messenger.Application.Tests.Chats;
 public sealed class ContactChatServiceTests
 {
     [Fact]
+    public void Chat_display_name_prefers_local_alias_then_profile_username_phone_and_fallback()
+    {
+        Assert.Equal("Семейный Врач", ChatDisplayName.Resolve(
+            "  Семейный ", " Врач  ", "Анна", "Иванова", "anna", "+79990000001"));
+        Assert.Equal("Анна Иванова", ChatDisplayName.Resolve(
+            null, null, "  Анна ", " Иванова  ", "anna", "+79990000001"));
+        Assert.Equal("anna", ChatDisplayName.Resolve(
+            null, null, " ", "", " anna ", "+79990000001"));
+        Assert.Equal("+79990000001", ChatDisplayName.Resolve(
+            null, null, "", "", null, " +79990000001 "));
+        Assert.Equal("Пользователь", ChatDisplayName.Resolve(
+            null, " ", "", " ", "", null));
+    }
+
+    [Fact]
     public async Task Adding_a_duplicate_contact_is_rejected_and_alias_stays_owner_local()
     {
         var store = new MemorySocialStore();

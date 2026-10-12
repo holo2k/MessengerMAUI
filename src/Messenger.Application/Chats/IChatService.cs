@@ -22,9 +22,6 @@ public interface IChatStore
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
 
-public sealed record ChatView(Chat Chat, ChatMember Member);
-public sealed record ChatPage(IReadOnlyList<ChatView> Items, string? NextCursor);
-
 public interface IChatService
 {
     Task<Chat> CreateDirectAsync(Guid requesterUserId, Guid targetUserId, CancellationToken cancellationToken = default);
@@ -34,7 +31,7 @@ public interface IChatService
         IReadOnlyCollection<Guid> memberUserIds,
         CancellationToken cancellationToken = default);
     Task<ChatView> GetAsync(Guid requesterUserId, Guid chatId, CancellationToken cancellationToken = default);
-    Task<ChatPage> ListAsync(Guid requesterUserId, string? cursor, int limit, CancellationToken cancellationToken = default);
+    Task<ChatSummaryPage> ListAsync(Guid requesterUserId, string? cursor, int limit, CancellationToken cancellationToken = default);
     Task UpdateGroupAsync(
         Guid requesterUserId,
         Guid chatId,

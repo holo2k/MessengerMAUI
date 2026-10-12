@@ -3,6 +3,14 @@ namespace Messenger.Contracts.Chats;
 public sealed record CreateDirectChatRequest(Guid TargetUserId);
 public sealed record CreateGroupChatRequest(string Title, IReadOnlyList<Guid> MemberUserIds);
 public sealed record UpdateGroupChatRequest(string Title, string? AvatarObjectId);
+public sealed record ChatPeerResponse(Guid UserId, string DisplayName, string? AvatarObjectId);
+public sealed record ChatLastMessageResponse(
+    Guid Id,
+    Guid SenderUserId,
+    string Type,
+    string? Body,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? DeletedAt);
 public sealed record ChatResponse(
     Guid Id,
     string Type,
@@ -13,7 +21,9 @@ public sealed record ChatResponse(
     bool IsArchived,
     bool IsHidden,
     long CurrentMessageSequence,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    ChatPeerResponse? Peer = null,
+    ChatLastMessageResponse? LastMessage = null);
 public sealed record ChatPageResponse(IReadOnlyList<ChatResponse> Items, string? NextCursor);
 public sealed record ChatMemberResponse(Guid UserId, string Role, DateTimeOffset JoinedAt);
 public sealed record AddChatMemberRequest(Guid UserId);

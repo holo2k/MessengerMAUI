@@ -5,6 +5,7 @@ using Messenger.Api.IntegrationTests.Auth;
 using Messenger.Contracts.Auth;
 using Messenger.Contracts.Chats;
 using Messenger.Contracts.Contacts;
+using Messenger.Contracts.Messages;
 using Messenger.Contracts.Users;
 using Messenger.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -137,6 +138,82 @@ public sealed class ChatAndContactEndpointTests : IAsyncLifetime
 
         await AuthorizeAsync(client, outsider);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/chats/{group.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Chat_list_and_get_return_owner_local_peer_and_latest_message()
+    {
+        await using var factory = await CreateFactoryAsync();
+        var client = factory.CreateClient();
+        var owner = await RegisterAsync(client, "+79990000341");
+        var peer = await RegisterAsync(client, "+79990000342");
+        var unnamed = await RegisterAsync(client, "+79990000343");
+        await UpdateProfileAsync(client, owner, "Никита", "Беликов", "owner_341");
+        await UpdateProfileAsync(client, peer, "Евгений", "Петров", "peer_342");
+
+        await AuthorizeAsync(client, owner);
+        var contactResponse = await client.PostAsJsonAsync("/api/contacts",
+            new CreateContactRequest(peer.UserId, "Женя", "Работа"));
+        Assert.Equal(HttpStatusCode.Created, contactResponse.StatusCode);
+        var direct = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(peer.UserId));
+        var sent = await PostAsync<MessageResponse>(client, $"/api/chats/{direct.Id}/messages",
+            new SendMessageRequest(Guid.NewGuid(), "text", "Последнее сообщение"));
+        var group = await PostAsync<ChatResponse>(client, "/api/chats/groups",
+            new CreateGroupChatRequest("Команда", [peer.UserId]));
+        await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(unnamed.UserId));
+
+        var ownerList = await client.GetFromJsonAsync<ChatPageResponse>("/api/chats?limit=100");
+        var ownerDirect = Assert.Single(ownerList!.Items, item => item.Id == direct.Id);
+        Assert.Equal(peer.UserId, ownerDirect.Peer?.UserId);
+        Assert.Equal("Женя Работа", ownerDirect.Peer?.DisplayName);
+        Assert.Equal(sent.Id, ownerDirect.LastMessage?.Id);
+        Assert.Equal(owner.UserId, ownerDirect.LastMessage?.SenderUserId);
+        Assert.Equal("text", ownerDirect.LastMessage?.Type);
+        Assert.Equal("Последнее сообщение", ownerDirect.LastMessage?.Body);
+        Assert.Equal(sent.CreatedAt.ToUnixTimeMilliseconds(), ownerDirect.LastMessage?.CreatedAt.ToUnixTimeMilliseconds());
+        Assert.Null(Assert.Single(ownerList.Items, item => item.Id == group.Id).Peer);
+        Assert.Equal("Пользователь", Assert.Single(ownerList.Items,
+            item => item.Peer?.UserId == unnamed.UserId).Peer?.DisplayName);
+
+        var ownerGet = await client.GetFromJsonAsync<ChatResponse>($"/api/chats/{direct.Id}");
+        Assert.Equal(ownerDirect.Peer, ownerGet!.Peer);
+        Assert.Equal(ownerDirect.LastMessage, ownerGet.LastMessage);
+
+        await AuthorizeAsync(client, peer);
+        var peerDirect = await client.GetFromJsonAsync<ChatResponse>($"/api/chats/{direct.Id}");
+        Assert.Equal(owner.UserId, peerDirect!.Peer?.UserId);
+        Assert.Equal("Никита Беликов", peerDirect.Peer?.DisplayName);
+    }
+
+    [Fact]
+    public async Task Corrupt_latest_message_uses_safe_preview_without_hiding_other_chats()
+    {
+        await using var factory = await CreateFactoryAsync();
+        var client = factory.CreateClient();
+        var owner = await RegisterAsync(client, "+79990000351");
+        var firstPeer = await RegisterAsync(client, "+79990000352");
+        var secondPeer = await RegisterAsync(client, "+79990000353");
+        await AuthorizeAsync(client, owner);
+        var corruptChat = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(firstPeer.UserId));
+        var healthyChat = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(secondPeer.UserId));
+        var corruptMessage = await PostAsync<MessageResponse>(client, $"/api/chats/{corruptChat.Id}/messages",
+            new SendMessageRequest(Guid.NewGuid(), "text", "Секрет"));
+        await PostAsync<MessageResponse>(client, $"/api/chats/{healthyChat.Id}/messages",
+            new SendMessageRequest(Guid.NewGuid(), "text", "Доступно"));
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MessengerDbContext>();
+            var invalidTag = "AAAA";
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE messages SET body_tag = {invalidTag} WHERE \"Id\" = {corruptMessage.Id}");
+        }
+
+        var response = await client.GetAsync("/api/chats?limit=100");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var page = await response.Content.ReadFromJsonAsync<ChatPageResponse>();
+        Assert.Equal("Сообщение", Assert.Single(page!.Items, item => item.Id == corruptChat.Id).LastMessage?.Body);
+        Assert.Equal("Доступно", Assert.Single(page.Items, item => item.Id == healthyChat.Id).LastMessage?.Body);
     }
 
     [Fact]

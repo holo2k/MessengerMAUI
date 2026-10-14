@@ -118,6 +118,31 @@ public sealed class ChatsViewModel(IConversationApi api)
 
     public void SetCurrentUser(Guid userId) => _currentUserId = userId;
 
+    public void Upsert(ChatResponse chat, bool incrementUnread)
+    {
+        var item = Chats.SingleOrDefault(value => value.Chat.Id == chat.Id);
+        var previousMessageId = item?.Chat.LastMessage?.Id;
+        if (item is null)
+        {
+            item = new ChatListItem(chat, 0, _currentUserId);
+            Chats.Add(item);
+        }
+        else
+        {
+            item.Update(chat);
+        }
+
+        if (incrementUnread &&
+            chat.LastMessage is { } message &&
+            message.SenderUserId != _currentUserId &&
+            message.Id != previousMessageId)
+        {
+            item.IncrementUnread();
+        }
+
+        SelectFolder(_selectedFolderId);
+    }
+
     public async Task MoveFolderAsync(int oldIndex, int newIndex, CancellationToken cancellationToken = default)
     {
         if (oldIndex == newIndex)

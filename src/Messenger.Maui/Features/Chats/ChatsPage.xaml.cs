@@ -9,14 +9,21 @@ public partial class ChatsPage : ContentPage
     private readonly ChatsViewModel _viewModel;
     private readonly IConversationApi _api;
     private readonly IServiceProvider _services;
+    private readonly ChatListSyncService _listSync;
+    private bool _listSyncAttached;
     private bool _isEditing;
 
-    public ChatsPage(ChatsViewModel viewModel, IConversationApi api, IServiceProvider services)
+    public ChatsPage(
+        ChatsViewModel viewModel,
+        IConversationApi api,
+        IServiceProvider services,
+        ChatListSyncService listSync)
     {
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
         _api = api;
         _services = services;
+        _listSync = listSync;
     }
 
     public bool IsEditing
@@ -31,7 +38,46 @@ public partial class ChatsPage : ContentPage
         var session = await _services.GetRequiredService<ISecureSessionStore>().GetAsync();
         _viewModel.SetCurrentUser(session?.Session.UserId ?? Guid.Empty);
         await SafeRunAsync(_viewModel.LoadAsync);
+        AttachListSync();
+        await SafeRunAsync(_listSync.StartAsync);
     }
+
+    protected override void OnDisappearing()
+    {
+        DetachListSync();
+        _listSync.Stop();
+        base.OnDisappearing();
+    }
+
+    private void AttachListSync()
+    {
+        if (_listSyncAttached)
+        {
+            return;
+        }
+
+        _listSync.ChatChanged += OnChatChangedAsync;
+        _listSync.ReloadRequested += OnReloadRequestedAsync;
+        _listSyncAttached = true;
+    }
+
+    private void DetachListSync()
+    {
+        if (!_listSyncAttached)
+        {
+            return;
+        }
+
+        _listSync.ChatChanged -= OnChatChangedAsync;
+        _listSync.ReloadRequested -= OnReloadRequestedAsync;
+        _listSyncAttached = false;
+    }
+
+    private Task OnChatChangedAsync(ChatResponse chat, Messenger.Contracts.Realtime.MessageCreatedEvent _) =>
+        MainThread.InvokeOnMainThreadAsync(() => _viewModel.Upsert(chat, incrementUnread: true));
+
+    private Task OnReloadRequestedAsync() =>
+        MainThread.InvokeOnMainThreadAsync(() => SafeRunAsync(_viewModel.LoadAsync));
 
     private async void OnRefreshClicked(object? sender, EventArgs e)
     {

@@ -12,6 +12,101 @@ namespace Messenger.Maui.Tests.Chats;
 public sealed class ChatSyncAndViewModelTests
 {
     [Fact]
+    public async Task Chat_list_sync_start_is_idempotent_and_fetches_one_summary_per_event()
+    {
+        var chat = Chat(Guid.NewGuid());
+        var api = new FakeConversationApi();
+        api.ChatRows.Add(chat);
+        var realtime = new FakeRealtimeClient();
+        var sync = new ChatListSyncService(api, realtime);
+        var changed = new List<Guid>();
+        sync.ChatChanged += (summary, _) => { changed.Add(summary.Id); return Task.CompletedTask; };
+
+        await sync.StartAsync();
+        await sync.StartAsync();
+        await realtime.EmitAsync(new MessageCreatedEvent(chat.Id, Guid.NewGuid(), 1));
+
+        Assert.Equal(1, api.ChatLookups);
+        Assert.Equal([chat.Id], changed);
+    }
+
+    [Fact]
+    public async Task Chat_list_sync_stop_unsubscribes_and_lookup_failure_waits_for_reconnect_reload()
+    {
+        var api = new FakeConversationApi { ChatLookupFailure = new HttpRequestException("offline") };
+        var realtime = new FakeRealtimeClient();
+        var sync = new ChatListSyncService(api, realtime);
+        var changed = 0;
+        var reloads = 0;
+        sync.ChatChanged += (_, _) => { changed++; return Task.CompletedTask; };
+        sync.ReloadRequested += () => { reloads++; return Task.CompletedTask; };
+        await sync.StartAsync();
+
+        await realtime.EmitAsync(new MessageCreatedEvent(Guid.NewGuid(), Guid.NewGuid(), 1));
+        await realtime.ReconnectAsync();
+        sync.Stop();
+        await realtime.EmitAsync(new MessageCreatedEvent(Guid.NewGuid(), Guid.NewGuid(), 2));
+        await realtime.ReconnectAsync();
+
+        Assert.Equal(1, api.ChatLookups);
+        Assert.Equal(0, changed);
+        Assert.Equal(1, reloads);
+    }
+
+    [Fact]
+    public void Chat_upsert_adds_or_updates_once_orders_by_last_message_and_counts_only_new_incoming()
+    {
+        var currentUserId = Guid.NewGuid();
+        var peerId = Guid.NewGuid();
+        var first = Chat(Guid.NewGuid()) with { UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-5) };
+        var target = Chat(Guid.NewGuid()) with { UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-10) };
+        var viewModel = new ChatsViewModel(new FakeConversationApi());
+        viewModel.SetCurrentUser(currentUserId);
+        viewModel.Chats.Add(new ChatListItem(first, 0, currentUserId));
+        viewModel.Chats.Add(new ChatListItem(target, 0, currentUserId));
+        viewModel.SelectFolder(null);
+        var incomingMessageId = Guid.NewGuid();
+        var incoming = target with
+        {
+            LastMessage = new ChatLastMessageResponse(
+                incomingMessageId, peerId, "text", "Новое", DateTimeOffset.UtcNow, null)
+        };
+
+        viewModel.Upsert(incoming, incrementUnread: true);
+        viewModel.Upsert(incoming, incrementUnread: true);
+
+        Assert.Equal(2, viewModel.Chats.Count);
+        Assert.Equal(target.Id, viewModel.VisibleChats.First().Chat.Id);
+        Assert.Equal(1, viewModel.Chats.Single(item => item.Chat.Id == target.Id).UnreadCount);
+
+        var outgoing = Chat(Guid.NewGuid()) with
+        {
+            LastMessage = new ChatLastMessageResponse(
+                Guid.NewGuid(), currentUserId, "text", "Моё", DateTimeOffset.UtcNow.AddSeconds(1), null)
+        };
+        viewModel.Upsert(outgoing, incrementUnread: true);
+
+        Assert.Equal(3, viewModel.Chats.Count);
+        Assert.Equal(0, viewModel.Chats.Single(item => item.Chat.Id == outgoing.Id).UnreadCount);
+    }
+
+    [Fact]
+    public void Chat_upsert_preserves_selected_folder_filter()
+    {
+        var included = Chat(Guid.NewGuid());
+        var excluded = Chat(Guid.NewGuid());
+        var folder = new ChatFolderResponse(Guid.NewGuid(), "Работа", 0, [included.Id]);
+        var viewModel = new ChatsViewModel(new FakeConversationApi());
+        viewModel.Folders.Add(folder);
+        viewModel.SelectFolder(folder.Id);
+
+        viewModel.Upsert(excluded, incrementUnread: false);
+        viewModel.Upsert(included, incrementUnread: false);
+
+        Assert.Equal([included.Id], viewModel.VisibleChats.Select(item => item.Chat.Id));
+    }
+
+    [Fact]
     public async Task Reconnect_reconciles_two_missed_messages_exactly_once_in_sequence()
     {
         var chatId = Guid.NewGuid();
@@ -278,11 +373,18 @@ public sealed class ChatSyncAndViewModelTests
         public int DirectCreates { get; private set; }
         public int GroupCreates { get; private set; }
         public Exception? SendFailure { get; set; }
+        public Exception? ChatLookupFailure { get; set; }
+        public int ChatLookups { get; private set; }
         public UpdateContactRequest? LastContactUpdate { get; private set; }
 
         public Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatResponse>>(ChatRows);
-        public Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default) =>
-            Task.FromResult(ChatRows.Single(chat => chat.Id == chatId));
+        public Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default)
+        {
+            ChatLookups++;
+            return ChatLookupFailure is null
+                ? Task.FromResult(ChatRows.Single(chat => chat.Id == chatId))
+                : Task.FromException<ChatResponse>(ChatLookupFailure);
+        }
         public Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatFolderResponse>>(FolderRows);
         public Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ContactResponse>>([]);
         public Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<UserSearchResponse>>([]);

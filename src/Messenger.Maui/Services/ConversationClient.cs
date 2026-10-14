@@ -9,6 +9,7 @@ namespace Messenger.Maui.Services;
 public interface IConversationApi
 {
     Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default);
+    Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default);
     Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default);
@@ -36,6 +37,10 @@ public sealed class ConversationClient(HttpClient httpClient) : IConversationApi
 {
     public async Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default) =>
         (await httpClient.GetFromJsonAsync<ChatPageResponse>("api/chats?limit=100", ct))?.Items ?? [];
+
+    public async Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default) =>
+        await httpClient.GetFromJsonAsync<ChatResponse>($"api/chats/{chatId}", ct)
+        ?? throw new InvalidDataException("Missing chat response.");
 
     public async Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) =>
         await httpClient.GetFromJsonAsync<List<ChatFolderResponse>>("api/chat-folders", ct) ?? [];

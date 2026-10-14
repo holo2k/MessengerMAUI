@@ -58,6 +58,80 @@ public sealed class ChatSyncAndViewModelTests
     }
 
     [Fact]
+    public void Chat_list_item_uses_peer_or_group_title_and_formats_text_direction()
+    {
+        var currentUserId = Guid.NewGuid();
+        var peerId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 10, 12, 10, 30, 0, TimeSpan.FromHours(5));
+        var direct = Chat(Guid.NewGuid()) with
+        {
+            Peer = new ChatPeerResponse(peerId, "Евгений", null),
+            LastMessage = new ChatLastMessageResponse(
+                Guid.NewGuid(), currentUserId, "text", "Привет", now.AddMinutes(-5), null)
+        };
+        var group = direct with { Id = Guid.NewGuid(), Type = "group", Title = "Команда", Peer = null };
+
+        var directItem = new ChatListItem(direct, 0, currentUserId, () => now);
+        var groupItem = new ChatListItem(group, 0, currentUserId, () => now);
+
+        Assert.Equal("Евгений", directItem.Title);
+        Assert.Equal("Вы: Привет", directItem.Preview);
+        Assert.Equal("Команда", groupItem.Title);
+        Assert.Equal("10:25", directItem.DateText);
+    }
+
+    [Theory]
+    [InlineData("image", null, false, "Фото")]
+    [InlineData("video", null, false, "Видео")]
+    [InlineData("audio", null, false, "Аудио")]
+    [InlineData("file", null, false, "Файл")]
+    [InlineData("text", "Удалено", true, "Сообщение удалено")]
+    public void Chat_list_item_maps_message_types(
+        string type,
+        string? body,
+        bool deleted,
+        string expected)
+    {
+        var now = new DateTimeOffset(2026, 10, 12, 10, 30, 0, TimeSpan.FromHours(5));
+        var chat = Chat(Guid.NewGuid()) with
+        {
+            LastMessage = new ChatLastMessageResponse(
+                Guid.NewGuid(), Guid.NewGuid(), type, body, now,
+                deleted ? now : null)
+        };
+
+        Assert.Equal(expected, new ChatListItem(chat, 0, Guid.Empty, () => now).Preview);
+    }
+
+    [Fact]
+    public void Chat_list_item_uses_local_calendar_boundary_and_empty_chat_has_no_date()
+    {
+        var now = new DateTimeOffset(2026, 10, 12, 0, 30, 0, TimeSpan.FromHours(5));
+        var today = Chat(Guid.NewGuid()) with
+        {
+            LastMessage = new ChatLastMessageResponse(
+                Guid.NewGuid(), Guid.NewGuid(), "text", "Сегодня",
+                new DateTimeOffset(2026, 10, 11, 19, 15, 0, TimeSpan.Zero), null)
+        };
+        var yesterday = today with
+        {
+            Id = Guid.NewGuid(),
+            LastMessage = today.LastMessage! with
+            {
+                Id = Guid.NewGuid(),
+                CreatedAt = new DateTimeOffset(2026, 10, 11, 18, 59, 0, TimeSpan.Zero)
+            }
+        };
+        var empty = Chat(Guid.NewGuid());
+
+        Assert.Equal("00:15", new ChatListItem(today, 0, Guid.Empty, () => now).DateText);
+        Assert.Equal("11.10.26", new ChatListItem(yesterday, 0, Guid.Empty, () => now).DateText);
+        var emptyItem = new ChatListItem(empty, 0, Guid.Empty, () => now);
+        Assert.Equal("Пока нет сообщений", emptyItem.Preview);
+        Assert.Equal(string.Empty, emptyItem.DateText);
+    }
+
+    [Fact]
     public async Task Unread_badge_increments_for_closed_chat_and_bulk_read_resets_it()
     {
         var api = new FakeConversationApi();
@@ -207,6 +281,8 @@ public sealed class ChatSyncAndViewModelTests
         public UpdateContactRequest? LastContactUpdate { get; private set; }
 
         public Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatResponse>>(ChatRows);
+        public Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default) =>
+            Task.FromResult(ChatRows.Single(chat => chat.Id == chatId));
         public Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatFolderResponse>>(FolderRows);
         public Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ContactResponse>>([]);
         public Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<UserSearchResponse>>([]);

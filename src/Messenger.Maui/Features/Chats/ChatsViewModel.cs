@@ -13,14 +13,69 @@ public enum ChatBulkAction
     Delete
 }
 
-public sealed class ChatListItem(ChatResponse chat, int unreadCount) : ObservableObject
+public sealed class ChatListItem(
+    ChatResponse chat,
+    int unreadCount,
+    Guid currentUserId = default,
+    Func<DateTimeOffset>? now = null) : ObservableObject
 {
+    private ChatResponse _chat = chat;
     private int _unreadCount = unreadCount;
-    public ChatResponse Chat { get; } = chat;
-    public string Title => string.IsNullOrWhiteSpace(Chat.Title) ? "Личный чат" : Chat.Title;
-    public string Preview => Chat.CurrentMessageSequence == 0 ? "Пока нет сообщений" : Chat.Type == "group" ? "Групповой чат" : "Переписка";
-    public string DateText => Chat.UpdatedAt.ToLocalTime().ToString("dd.MM.yy");
+    private readonly Func<DateTimeOffset> _now = now ?? (() => DateTimeOffset.Now);
+    public ChatResponse Chat => _chat;
+    public string Title => Chat.Type == "direct"
+        ? Chat.Peer?.DisplayName ?? "Пользователь"
+        : string.IsNullOrWhiteSpace(Chat.Title) ? "Групповой чат" : Chat.Title;
+    public string Preview
+    {
+        get
+        {
+            if (Chat.LastMessage is not { } message)
+            {
+                return "Пока нет сообщений";
+            }
+
+            var value = message.DeletedAt.HasValue
+                ? "Сообщение удалено"
+                : message.Type switch
+                {
+                    "text" => string.IsNullOrWhiteSpace(message.Body) ? "Сообщение" : message.Body,
+                    "image" => "Фото",
+                    "video" => "Видео",
+                    "audio" => "Аудио",
+                    "file" => "Файл",
+                    _ => "Сообщение"
+                };
+            return currentUserId != Guid.Empty && message.SenderUserId == currentUserId
+                ? $"Вы: {value}"
+                : value;
+        }
+    }
+    public string DateText
+    {
+        get
+        {
+            if (Chat.LastMessage is not { } message)
+            {
+                return string.Empty;
+            }
+
+            var localNow = _now();
+            var localCreated = message.CreatedAt.ToOffset(localNow.Offset);
+            return localCreated.Date == localNow.Date
+                ? localCreated.ToString("HH:mm")
+                : localCreated.ToString("dd.MM.yy");
+        }
+    }
     public int UnreadCount { get => _unreadCount; private set => SetProperty(ref _unreadCount, value); }
+    public void Update(ChatResponse value)
+    {
+        _chat = value;
+        OnPropertyChanged(nameof(Chat));
+        OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(Preview));
+        OnPropertyChanged(nameof(DateText));
+    }
     public void IncrementUnread() => UnreadCount++;
     public void MarkRead() => UnreadCount = 0;
 }
@@ -28,6 +83,7 @@ public sealed class ChatListItem(ChatResponse chat, int unreadCount) : Observabl
 public sealed class ChatsViewModel(IConversationApi api)
 {
     private Guid? _selectedFolderId;
+    private Guid _currentUserId;
     public ObservableCollection<ChatFolderResponse> Folders { get; } = [];
     public ObservableCollection<ChatListItem> Chats { get; } = [];
     public ObservableCollection<ChatListItem> VisibleChats { get; } = [];
@@ -42,7 +98,7 @@ public sealed class ChatsViewModel(IConversationApi api)
         Chats.Clear();
         foreach (var chat in await api.GetChatsAsync(cancellationToken))
         {
-            Chats.Add(new ChatListItem(chat, 0));
+            Chats.Add(new ChatListItem(chat, 0, _currentUserId));
         }
         SelectFolder(_selectedFolderId);
     }
@@ -53,11 +109,14 @@ public sealed class ChatsViewModel(IConversationApi api)
         var folder = Folders.FirstOrDefault(value => value.Id == folderId);
         VisibleChats.Clear();
         foreach (var item in Chats.Where(item => !item.Chat.IsHidden && !item.Chat.IsArchived &&
-                     (folder is null || folder.ChatIds.Contains(item.Chat.Id))).OrderByDescending(item => item.Chat.UpdatedAt))
+                     (folder is null || folder.ChatIds.Contains(item.Chat.Id)))
+                 .OrderByDescending(item => item.Chat.LastMessage?.CreatedAt ?? item.Chat.UpdatedAt))
         {
             VisibleChats.Add(item);
         }
     }
+
+    public void SetCurrentUser(Guid userId) => _currentUserId = userId;
 
     public async Task MoveFolderAsync(int oldIndex, int newIndex, CancellationToken cancellationToken = default)
     {

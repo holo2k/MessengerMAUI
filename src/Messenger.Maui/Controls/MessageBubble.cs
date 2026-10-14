@@ -29,7 +29,7 @@ public sealed class MessageBubble : ContentView
         stack.Add(new Label { Text = DisplayValueConverter.MessageText(message), FontSize = 16, LineBreakMode = LineBreakMode.WordWrap });
         stack.Add(new Label
         {
-            Text = $"{(message.IsPinned ? "Закреплено · " : "")}{(message.EditedAt.HasValue ? "изменено · " : "")}{message.CreatedAt.ToLocalTime():HH:mm}",
+            Text = $"{(message.IsPinned ? "Закреплено · " : "")}{(message.EditedAt.HasValue ? "изменено · " : "")}{message.CreatedAt.ToLocalTime():dd.MM.yyyy HH:mm}",
             FontSize = 10, TextColor = Color.FromArgb("#929292"), HorizontalOptions = LayoutOptions.End
         });
         Content = new Border

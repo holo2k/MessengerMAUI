@@ -28,6 +28,8 @@ public partial class ChatsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        var session = await _services.GetRequiredService<ISecureSessionStore>().GetAsync();
+        _viewModel.SetCurrentUser(session?.Session.UserId ?? Guid.Empty);
         await SafeRunAsync(_viewModel.LoadAsync);
     }
 

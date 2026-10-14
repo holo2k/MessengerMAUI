@@ -21,7 +21,7 @@ public sealed class EfChatSummaryReader(
         var rows = await (from member in dbContext.ChatMembers
             join chat in dbContext.Chats on member.ChatId equals chat.Id
             where member.UserId == requesterUserId && member.LeftAt == null &&
-                  member.HiddenAt == null && chat.DeletedAt == null && chat.Id == chatId
+                  chat.DeletedAt == null && chat.Id == chatId
             select new SummaryRow(chat, member))
             .ToListAsync(cancellationToken);
         return (await EnrichAsync(requesterUserId, rows, cancellationToken)).SingleOrDefault();
@@ -64,8 +64,10 @@ public sealed class EfChatSummaryReader(
         }
 
         var chatIds = rows.Select(row => row.Chat.Id).ToArray();
+        var directChatIds = rows.Where(row => row.Chat.Type == ChatType.Direct)
+            .Select(row => row.Chat.Id).ToArray();
         var peers = await dbContext.ChatMembers
-            .Where(member => chatIds.Contains(member.ChatId) && member.UserId != requesterUserId && member.LeftAt == null)
+            .Where(member => directChatIds.Contains(member.ChatId) && member.UserId != requesterUserId && member.LeftAt == null)
             .ToListAsync(cancellationToken);
         var peerByChat = peers.GroupBy(member => member.ChatId)
             .ToDictionary(group => group.Key, group => group.First());

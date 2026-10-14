@@ -107,6 +107,32 @@ public sealed class ChatSyncAndViewModelTests
     }
 
     [Fact]
+    public async Task Chat_upsert_during_initial_load_is_not_overwritten_by_a_stale_response()
+    {
+        var chat = Chat(Guid.NewGuid()) with
+        {
+            LastMessage = new ChatLastMessageResponse(
+                Guid.NewGuid(), Guid.NewGuid(), "text", "Новое", DateTimeOffset.UtcNow, null)
+        };
+        var api = new FakeConversationApi
+        {
+            FirstChatLookupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
+            ReleaseFirstChatLookup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
+            SecondChatRows = [chat]
+        };
+        var viewModel = new ChatsViewModel(api);
+        var load = viewModel.LoadAsync();
+        await api.FirstChatLookupStarted.Task;
+
+        viewModel.Upsert(chat, incrementUnread: true);
+        api.ReleaseFirstChatLookup.SetResult();
+        await load;
+
+        Assert.Equal(2, api.ChatListLookups);
+        Assert.Equal(chat.Id, Assert.Single(viewModel.VisibleChats).Chat.Id);
+    }
+
+    [Fact]
     public async Task Reconnect_reconciles_two_missed_messages_exactly_once_in_sequence()
     {
         var chatId = Guid.NewGuid();
@@ -166,13 +192,34 @@ public sealed class ChatSyncAndViewModelTests
         };
         var group = direct with { Id = Guid.NewGuid(), Type = "group", Title = "Команда", Peer = null };
 
-        var directItem = new ChatListItem(direct, 0, currentUserId, () => now);
-        var groupItem = new ChatListItem(group, 0, currentUserId, () => now);
+        var zone = TimeZoneInfo.CreateCustomTimeZone("UTC+5-test", TimeSpan.FromHours(5), "UTC+5-test", "UTC+5-test");
+        var directItem = new ChatListItem(direct, 0, currentUserId, () => now, zone);
+        var groupItem = new ChatListItem(group, 0, currentUserId, () => now, zone);
 
         Assert.Equal("Евгений", directItem.Title);
         Assert.Equal("Вы: Привет", directItem.Preview);
         Assert.Equal("Команда", groupItem.Title);
         Assert.Equal("10:25", directItem.DateText);
+        Assert.Null(directItem.AvatarObjectId);
+        Assert.Null(groupItem.AvatarObjectId);
+    }
+
+    [Fact]
+    public void Chat_list_item_selects_peer_or_group_avatar()
+    {
+        var direct = Chat(Guid.NewGuid()) with
+        {
+            AvatarObjectId = "wrong-group-avatar",
+            Peer = new ChatPeerResponse(Guid.NewGuid(), "Peer", "peer-avatar")
+        };
+        var group = direct with
+        {
+            Id = Guid.NewGuid(), Type = "group", Title = "Group", Peer = null,
+            AvatarObjectId = "group-avatar"
+        };
+
+        Assert.Equal("peer-avatar", new ChatListItem(direct, 0).AvatarObjectId);
+        Assert.Equal("group-avatar", new ChatListItem(group, 0).AvatarObjectId);
     }
 
     [Theory]
@@ -219,8 +266,9 @@ public sealed class ChatSyncAndViewModelTests
         };
         var empty = Chat(Guid.NewGuid());
 
-        Assert.Equal("00:15", new ChatListItem(today, 0, Guid.Empty, () => now).DateText);
-        Assert.Equal("11.10.26", new ChatListItem(yesterday, 0, Guid.Empty, () => now).DateText);
+        var zone = TimeZoneInfo.CreateCustomTimeZone("UTC+5-boundary", TimeSpan.FromHours(5), "UTC+5-boundary", "UTC+5-boundary");
+        Assert.Equal("00:15", new ChatListItem(today, 0, Guid.Empty, () => now, zone).DateText);
+        Assert.Equal("11.10.26", new ChatListItem(yesterday, 0, Guid.Empty, () => now, zone).DateText);
         var emptyItem = new ChatListItem(empty, 0, Guid.Empty, () => now);
         Assert.Equal("Пока нет сообщений", emptyItem.Preview);
         Assert.Equal(string.Empty, emptyItem.DateText);
@@ -375,9 +423,22 @@ public sealed class ChatSyncAndViewModelTests
         public Exception? SendFailure { get; set; }
         public Exception? ChatLookupFailure { get; set; }
         public int ChatLookups { get; private set; }
+        public int ChatListLookups { get; private set; }
+        public TaskCompletionSource? FirstChatLookupStarted { get; init; }
+        public TaskCompletionSource? ReleaseFirstChatLookup { get; init; }
+        public IReadOnlyList<ChatResponse>? SecondChatRows { get; init; }
         public UpdateContactRequest? LastContactUpdate { get; private set; }
 
-        public Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatResponse>>(ChatRows);
+        public async Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default)
+        {
+            ChatListLookups++;
+            if (ChatListLookups == 1 && ReleaseFirstChatLookup is not null)
+            {
+                FirstChatLookupStarted?.SetResult();
+                await ReleaseFirstChatLookup.Task.WaitAsync(ct);
+            }
+            return ChatListLookups > 1 && SecondChatRows is not null ? SecondChatRows : ChatRows;
+        }
         public Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default)
         {
             ChatLookups++;
@@ -387,6 +448,7 @@ public sealed class ChatSyncAndViewModelTests
         }
         public Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatFolderResponse>>(FolderRows);
         public Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ContactResponse>>([]);
+        public Task<ContactResponse?> GetContactByUserAsync(Guid userId, CancellationToken ct = default) => Task.FromResult<ContactResponse?>(null);
         public Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<UserSearchResponse>>([]);
         public Task<UserSearchResponse> GetVisibleUserAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
 

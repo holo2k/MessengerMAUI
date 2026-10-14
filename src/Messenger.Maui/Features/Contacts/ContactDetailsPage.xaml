@@ -14,7 +14,7 @@
             <VerticalStackLayout Spacing="0">
                 <VerticalStackLayout x:Name="InfoPanel" Spacing="0">
                     <Grid BackgroundColor="White" Padding="24">
-                        <ui:AvatarView Person="{Binding User}" WidthRequest="250" HeightRequest="250" HorizontalOptions="Center" />
+                        <ui:AvatarView Person="{Binding User}" AvatarObjectId="{Binding AvatarObjectId}" WidthRequest="250" HeightRequest="250" HorizontalOptions="Center" />
                     </Grid>
                     <Grid ColumnDefinitions="*,44,44" BackgroundColor="White" Padding="16,14" ColumnSpacing="8">
                         <VerticalStackLayout Spacing="6">

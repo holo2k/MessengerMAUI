@@ -110,6 +110,8 @@ public sealed class ChatAndContactEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.NoContent,
             (await client.DeleteAsync($"/api/chats/{firstDirect.Id}")).StatusCode);
+        var hidden = await client.GetFromJsonAsync<ChatResponse>($"/api/chats/{firstDirect.Id}");
+        Assert.True(hidden!.IsHidden);
         var reactivated = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(admin.UserId));
         Assert.Equal(firstDirect.Id, reactivated.Id);
         Assert.False(reactivated.IsHidden);

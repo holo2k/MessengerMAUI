@@ -1,5 +1,6 @@
 using Messenger.Application.Media;
 using Messenger.Domain.Media;
+using Messenger.Domain.Users;
 using Messenger.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,12 +15,36 @@ public sealed class EfUploadStore(MessengerDbContext db) : IUploadStore
     public async Task<IReadOnlyList<UploadSession>> ListExpiredPendingAsync(DateTimeOffset now, CancellationToken ct) =>
         await db.UploadSessions.Where(x => x.Status == UploadStatus.Pending && x.ExpiresAt <= now).ToArrayAsync(ct);
 
-    public Task<bool> CanAccessObjectAsync(Guid userId, Guid objectId, CancellationToken ct) =>
-        (from attachment in db.MessageAttachments
-         join message in db.Messages on attachment.MessageId equals message.Id
-         join member in db.ChatMembers on message.ChatId equals member.ChatId
-         where attachment.ObjectId == objectId && member.UserId == userId && member.LeftAt == null && member.HiddenAt == null
-         select attachment).AnyAsync(ct);
+    public async Task<bool> CanAccessObjectAsync(Guid userId, Guid objectId, CancellationToken ct)
+    {
+        if (await (from attachment in db.MessageAttachments
+            join message in db.Messages on attachment.MessageId equals message.Id
+            join member in db.ChatMembers on message.ChatId equals member.ChatId
+            where attachment.ObjectId == objectId && member.UserId == userId && member.LeftAt == null
+            select attachment).AnyAsync(ct))
+        {
+            return true;
+        }
+
+        var avatarObjectId = objectId.ToString();
+        if (await (from profile in db.UserProfiles
+            join privacyValue in db.UserPrivacySettings on profile.UserId equals privacyValue.UserId into privacyRows
+            from privacy in privacyRows.DefaultIfEmpty()
+            where profile.AvatarObjectId == avatarObjectId &&
+                  (profile.UserId == userId || privacy == null ||
+                   privacy.AvatarVisibility == PrivacyVisibility.Everybody ||
+                   privacy.AvatarVisibility == PrivacyVisibility.Contacts && db.Contacts.Any(contact =>
+                       contact.OwnerUserId == profile.UserId && contact.TargetUserId == userId))
+            select profile).AnyAsync(ct))
+        {
+            return true;
+        }
+
+        return await (from chat in db.Chats
+            join member in db.ChatMembers on chat.Id equals member.ChatId
+            where chat.AvatarObjectId == avatarObjectId && member.UserId == userId && member.LeftAt == null
+            select chat).AnyAsync(ct);
+    }
 
     public async Task AttachToMessageAsync(Guid actorId, Guid messageId, IReadOnlyList<Guid> objectIds, CancellationToken ct)
     {

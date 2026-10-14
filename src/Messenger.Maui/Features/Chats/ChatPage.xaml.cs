@@ -31,6 +31,9 @@ public partial class ChatPage : ContentPage
             : string.IsNullOrWhiteSpace(chat.Title) ? "Групповой чат" : chat.Title;
         ChatTitle.Text = title;
         HeaderAvatar.Person = title;
+        HeaderAvatar.AvatarObjectId = chat.Type == "direct"
+            ? chat.Peer?.AvatarObjectId
+            : chat.AvatarObjectId;
     }
 
     protected override async void OnAppearing()

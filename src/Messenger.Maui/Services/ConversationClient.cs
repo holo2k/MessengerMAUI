@@ -12,6 +12,7 @@ public interface IConversationApi
     Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default);
     Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default);
+    Task<ContactResponse?> GetContactByUserAsync(Guid userId, CancellationToken ct = default);
     Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default);
     Task<UserSearchResponse> GetVisibleUserAsync(Guid userId, CancellationToken ct = default);
     Task<IReadOnlyList<MessageResponse>> GetMessagesAsync(Guid chatId, long afterSequence, CancellationToken ct = default);
@@ -48,6 +49,27 @@ public sealed class ConversationClient(HttpClient httpClient) : IConversationApi
 
     public async Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default) =>
         (await httpClient.GetFromJsonAsync<ContactPageResponse>("api/contacts?limit=100", ct))?.Items ?? [];
+
+    public async Task<ContactResponse?> GetContactByUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        string? cursor = null;
+        do
+        {
+            var uri = "api/contacts?limit=100" + (cursor is null
+                ? string.Empty
+                : $"&cursor={Uri.EscapeDataString(cursor)}");
+            var page = await httpClient.GetFromJsonAsync<ContactPageResponse>(uri, ct)
+                ?? throw new InvalidDataException("Missing contacts response.");
+            var contact = page.Items.SingleOrDefault(value => value.UserId == userId);
+            if (contact is not null)
+            {
+                return contact;
+            }
+            cursor = page.NextCursor;
+        } while (cursor is not null);
+
+        return null;
+    }
 
     public async Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) =>
         (await httpClient.GetFromJsonAsync<UserSearchPageResponse>(

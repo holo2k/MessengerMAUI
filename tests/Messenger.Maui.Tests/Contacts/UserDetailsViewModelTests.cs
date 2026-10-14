@@ -29,6 +29,7 @@ public sealed class UserDetailsViewModelTests
         Assert.True(viewModel.CanEdit);
         Assert.True(viewModel.IsMuted);
         Assert.Equal("+79512723576", viewModel.Phone);
+        Assert.Equal(userId, api.ContactLookupUserId);
     }
 
     [Fact]
@@ -75,6 +76,34 @@ public sealed class UserDetailsViewModelTests
         Assert.Equal("tel:+79512723576", dialer.LastUri);
     }
 
+    [Theory]
+    [InlineData(null, "Локальная", "Профиль", "Фамилия", "user", "+70000000000", "Локальная")]
+    [InlineData(null, null, "", "", "user", "+70000000000", "user")]
+    [InlineData(null, null, "", "", null, "+70000000000", "+70000000000")]
+    public async Task User_details_uses_whole_alias_and_profile_fallback_chain(
+        string? localFirst,
+        string? localLast,
+        string first,
+        string last,
+        string? username,
+        string? phone,
+        string expected)
+    {
+        var userId = Guid.NewGuid();
+        var api = new UserDetailsApi
+        {
+            User = new UserSearchResponse(userId, first, last, username, phone, null, null)
+        };
+        api.Contacts.Add(new ContactResponse(
+            Guid.NewGuid(), userId, first, last, username, phone, null, null,
+            localFirst, localLast, false, DateTimeOffset.UtcNow));
+        var viewModel = new UserDetailsViewModel(api, new RecordingDialer());
+
+        await viewModel.LoadAsync(userId);
+
+        Assert.Equal(expected, viewModel.DisplayName);
+    }
+
     private sealed class RecordingDialer : IPhoneDialer
     {
         public string? LastUri { get; private set; }
@@ -87,6 +116,7 @@ public sealed class UserDetailsViewModelTests
         public List<ContactResponse> Contacts { get; } = [];
         public Guid? UpdatedContactId { get; private set; }
         public UpdateContactRequest? UpdateRequest { get; private set; }
+        public Guid? ContactLookupUserId { get; private set; }
 
         public Task<UserSearchResponse> GetVisibleUserAsync(Guid userId, CancellationToken ct = default)
         {
@@ -95,6 +125,11 @@ public sealed class UserDetailsViewModelTests
         }
         public Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<ContactResponse>>(Contacts);
+        public Task<ContactResponse?> GetContactByUserAsync(Guid userId, CancellationToken ct = default)
+        {
+            ContactLookupUserId = userId;
+            return Task.FromResult(Contacts.SingleOrDefault(value => value.UserId == userId));
+        }
         public Task<ContactResponse> UpdateContactAsync(Guid contactId, UpdateContactRequest request, CancellationToken ct = default)
         {
             UpdatedContactId = contactId;

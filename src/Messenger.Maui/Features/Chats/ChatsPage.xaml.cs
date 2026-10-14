@@ -37,9 +37,9 @@ public partial class ChatsPage : ContentPage
         base.OnAppearing();
         var session = await _services.GetRequiredService<ISecureSessionStore>().GetAsync();
         _viewModel.SetCurrentUser(session?.Session.UserId ?? Guid.Empty);
-        await SafeRunAsync(_viewModel.LoadAsync);
         AttachListSync();
         await SafeRunAsync(_listSync.StartAsync);
+        await SafeRunAsync(_viewModel.LoadAsync);
     }
 
     protected override void OnDisappearing()

@@ -26,7 +26,7 @@
                         <VisualStateManager.VisualStateGroups><VisualStateGroup Name="CommonStates">
                             <VisualState Name="Normal" /><VisualState Name="Selected"><VisualState.Setters><Setter Property="BackgroundColor" Value="{StaticResource PrimarySoft}" /></VisualState.Setters></VisualState>
                         </VisualStateGroup></VisualStateManager.VisualStateGroups>
-                        <ui:AvatarView Person="{Binding .}" HeightRequest="36" WidthRequest="36" />
+                        <ui:AvatarView Person="{Binding .}" AvatarObjectId="{Binding AvatarObjectId}" HeightRequest="36" WidthRequest="36" />
                         <Label Grid.Column="1" Text="{Binding ., Converter={StaticResource DisplayValue}, ConverterParameter=name}" FontSize="15" VerticalOptions="Center" LineBreakMode="TailTruncation" />
                         <Border Grid.Column="2" Stroke="{StaticResource TextTertiary}" StrokeThickness="1" StrokeShape="Ellipse" HeightRequest="20" WidthRequest="20" VerticalOptions="Center" />
                     </Grid>

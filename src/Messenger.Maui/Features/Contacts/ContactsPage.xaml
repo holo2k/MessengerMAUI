@@ -19,7 +19,7 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="contacts:ContactResponse">
                     <Grid ColumnDefinitions="36,*,44" RowDefinitions="*,1" ColumnSpacing="12" BackgroundColor="White" Padding="16,8,8,0" MinimumHeightRequest="56">
-                        <ui:AvatarView Person="{Binding .}" WidthRequest="36" HeightRequest="36" VerticalOptions="Center" Margin="0,0,0,8" />
+                        <ui:AvatarView Person="{Binding .}" AvatarObjectId="{Binding AvatarObjectId}" WidthRequest="36" HeightRequest="36" VerticalOptions="Center" Margin="0,0,0,8" />
                         <Label Grid.Column="1" Text="{Binding ., Converter={StaticResource DisplayValue}, ConverterParameter=name}" FontSize="15" LineBreakMode="TailTruncation" VerticalOptions="Center" Margin="0,0,0,8" />
                         <ImageButton Grid.Column="2" Source="icon_info.png" CommandParameter="{Binding .}" Clicked="OnInfoClicked" SemanticProperties.Description="Информация о контакте" />
                         <BoxView Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource SeparatorLine}" />
@@ -32,7 +32,7 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="contacts:UserSearchResponse">
                     <Grid ColumnDefinitions="36,*,20" Padding="16,10" ColumnSpacing="12" BackgroundColor="White">
-                        <ui:AvatarView Person="{Binding .}" WidthRequest="36" HeightRequest="36" />
+                        <ui:AvatarView Person="{Binding .}" AvatarObjectId="{Binding AvatarObjectId}" WidthRequest="36" HeightRequest="36" />
                         <VerticalStackLayout Grid.Column="1" Spacing="3">
                             <Label Text="{Binding ., Converter={StaticResource DisplayValue}, ConverterParameter=name}" FontSize="15" LineBreakMode="TailTruncation" />
                             <Label Text="{Binding Username, StringFormat='@{0}'}" Style="{StaticResource SecondaryLabel}" />

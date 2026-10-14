@@ -68,7 +68,7 @@ public sealed class UploadClient(HttpClient httpClient, HttpClient transferClien
         response.EnsureSuccessStatusCode();
     }
 
-    private static Uri DeviceUri(Uri signedUri)
+    internal static Uri DeviceUri(Uri signedUri)
     {
 #if ANDROID
         if (signedUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || signedUri.Host == "127.0.0.1")

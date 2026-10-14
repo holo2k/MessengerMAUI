@@ -17,15 +17,20 @@ public sealed class ChatListItem(
     ChatResponse chat,
     int unreadCount,
     Guid currentUserId = default,
-    Func<DateTimeOffset>? now = null) : ObservableObject
+    Func<DateTimeOffset>? now = null,
+    TimeZoneInfo? localTimeZone = null) : ObservableObject
 {
     private ChatResponse _chat = chat;
     private int _unreadCount = unreadCount;
     private readonly Func<DateTimeOffset> _now = now ?? (() => DateTimeOffset.Now);
+    private readonly TimeZoneInfo _localTimeZone = localTimeZone ?? TimeZoneInfo.Local;
     public ChatResponse Chat => _chat;
     public string Title => Chat.Type == "direct"
         ? Chat.Peer?.DisplayName ?? "Пользователь"
         : string.IsNullOrWhiteSpace(Chat.Title) ? "Групповой чат" : Chat.Title;
+    public string? AvatarObjectId => Chat.Type == "direct"
+        ? Chat.Peer?.AvatarObjectId
+        : Chat.AvatarObjectId;
     public string Preview
     {
         get
@@ -60,8 +65,8 @@ public sealed class ChatListItem(
                 return string.Empty;
             }
 
-            var localNow = _now();
-            var localCreated = message.CreatedAt.ToOffset(localNow.Offset);
+            var localNow = TimeZoneInfo.ConvertTime(_now(), _localTimeZone);
+            var localCreated = TimeZoneInfo.ConvertTime(message.CreatedAt, _localTimeZone);
             return localCreated.Date == localNow.Date
                 ? localCreated.ToString("HH:mm")
                 : localCreated.ToString("dd.MM.yy");
@@ -73,6 +78,7 @@ public sealed class ChatListItem(
         _chat = value;
         OnPropertyChanged(nameof(Chat));
         OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(AvatarObjectId));
         OnPropertyChanged(nameof(Preview));
         OnPropertyChanged(nameof(DateText));
     }
@@ -84,23 +90,36 @@ public sealed class ChatsViewModel(IConversationApi api)
 {
     private Guid? _selectedFolderId;
     private Guid _currentUserId;
+    private long _upsertVersion;
     public ObservableCollection<ChatFolderResponse> Folders { get; } = [];
     public ObservableCollection<ChatListItem> Chats { get; } = [];
     public ObservableCollection<ChatListItem> VisibleChats { get; } = [];
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
-        Folders.Clear();
-        foreach (var folder in await api.GetFoldersAsync(cancellationToken))
+        while (true)
         {
-            Folders.Add(folder);
+            var version = _upsertVersion;
+            var folders = await api.GetFoldersAsync(cancellationToken);
+            var chats = await api.GetChatsAsync(cancellationToken);
+            if (version != _upsertVersion)
+            {
+                continue;
+            }
+
+            Folders.Clear();
+            foreach (var folder in folders)
+            {
+                Folders.Add(folder);
+            }
+            Chats.Clear();
+            foreach (var chat in chats)
+            {
+                Chats.Add(new ChatListItem(chat, 0, _currentUserId));
+            }
+            SelectFolder(_selectedFolderId);
+            return;
         }
-        Chats.Clear();
-        foreach (var chat in await api.GetChatsAsync(cancellationToken))
-        {
-            Chats.Add(new ChatListItem(chat, 0, _currentUserId));
-        }
-        SelectFolder(_selectedFolderId);
     }
 
     public void SelectFolder(Guid? folderId)
@@ -120,6 +139,7 @@ public sealed class ChatsViewModel(IConversationApi api)
 
     public void Upsert(ChatResponse chat, bool incrementUnread)
     {
+        _upsertVersion++;
         var item = Chats.SingleOrDefault(value => value.Chat.Id == chat.Id);
         var previousMessageId = item?.Chat.LastMessage?.Id;
         if (item is null)

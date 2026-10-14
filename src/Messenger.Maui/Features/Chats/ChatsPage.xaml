@@ -50,7 +50,7 @@
                             <Border Stroke="{StaticResource TextTertiary}" StrokeThickness="1" StrokeShape="Ellipse" HeightRequest="22" WidthRequest="22"
                                     VerticalOptions="Center" Margin="0,0,12,10"
                                     IsVisible="{Binding Source={x:Reference ChatsScreen}, Path=IsEditing, x:DataType=chats:ChatsPage}" />
-                            <ui:AvatarView Grid.Column="1" Person="{Binding Title}" VerticalOptions="Start" HorizontalOptions="Start" />
+                            <ui:AvatarView Grid.Column="1" Person="{Binding Title}" AvatarObjectId="{Binding AvatarObjectId}" VerticalOptions="Start" HorizontalOptions="Start" />
                             <Grid Grid.Column="2" RowDefinitions="Auto,*,1" RowSpacing="5" Padding="0,0,0,0">
                                 <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="16" LineBreakMode="TailTruncation" />
                                 <Label Grid.Row="1" Text="{Binding Preview}" TextColor="{StaticResource TextSecondary}" FontSize="14" LineBreakMode="TailTruncation" Margin="0,0,0,10" />

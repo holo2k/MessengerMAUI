@@ -7,6 +7,7 @@ using Messenger.Contracts.Auth;
 using Messenger.Contracts.Media;
 using Messenger.Contracts.Chats;
 using Messenger.Contracts.Messages;
+using Messenger.Contracts.Users;
 using Messenger.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,6 +58,14 @@ public sealed class UploadEndpointTests : IAsyncLifetime
         Assert.NotNull(authorization);
         Assert.InRange(authorization.ExpiresAt - DateTimeOffset.UtcNow, TimeSpan.FromMinutes(4), TimeSpan.FromMinutes(6));
         Assert.Equal(bytes, await new HttpClient().GetByteArrayAsync(authorization.Url));
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await client.PostAsJsonAsync("/api/me/avatar", new AvatarRequest(stored.Id.ToString()))).StatusCode);
+        Authorize(client, outsider);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/objects/{stored.Id}/download")).StatusCode);
+        Authorize(client, owner);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsJsonAsync(
+            "/api/me/privacy", new PrivacyRequest("contacts", "nobody", "contacts"))).StatusCode);
 
         var chat = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(recipient.UserId));
         await PostAsync<MessageResponse>(client, $"/api/chats/{chat.Id}/messages",

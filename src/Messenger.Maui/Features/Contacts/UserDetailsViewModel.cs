@@ -15,10 +15,14 @@ public sealed class UserDetailsViewModel(
     public UserSearchResponse? User => _user;
     public ContactResponse? Contact => _contact;
     public string DisplayName => Join(
-        _contact?.LocalFirstName ?? _user?.FirstName,
-        _contact?.LocalLastName ?? _user?.LastName);
+        _contact?.LocalFirstName,
+        _contact?.LocalLastName) ?? Join(_user?.FirstName, _user?.LastName)
+        ?? _user?.Username
+        ?? _user?.Phone
+        ?? "Пользователь";
     public string? Phone => _user?.Phone;
     public string? Bio => _user?.Bio;
+    public string? AvatarObjectId => _user?.AvatarObjectId;
     public bool CanEdit => _contact is not null;
     public bool CanCall => !string.IsNullOrWhiteSpace(Phone);
     public bool IsMuted => _contact?.IsMuted ?? false;
@@ -26,10 +30,10 @@ public sealed class UserDetailsViewModel(
     public async Task LoadAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var userTask = api.GetVisibleUserAsync(userId, cancellationToken);
-        var contactsTask = api.GetContactsAsync(cancellationToken);
-        await Task.WhenAll(userTask, contactsTask);
+        var contactTask = api.GetContactByUserAsync(userId, cancellationToken);
+        await Task.WhenAll(userTask, contactTask);
         _user = await userTask;
-        _contact = (await contactsTask).SingleOrDefault(value => value.UserId == userId);
+        _contact = await contactTask;
         NotifyAll();
     }
 
@@ -69,11 +73,15 @@ public sealed class UserDetailsViewModel(
         OnPropertyChanged(nameof(DisplayName));
         OnPropertyChanged(nameof(Phone));
         OnPropertyChanged(nameof(Bio));
+        OnPropertyChanged(nameof(AvatarObjectId));
         OnPropertyChanged(nameof(CanEdit));
         OnPropertyChanged(nameof(CanCall));
         OnPropertyChanged(nameof(IsMuted));
     }
 
-    private static string Join(string? firstName, string? lastName) =>
-        $"{firstName} {lastName}".Trim();
+    private static string? Join(string? firstName, string? lastName)
+    {
+        var value = $"{firstName} {lastName}".Trim();
+        return value.Length == 0 ? null : value;
+    }
 }

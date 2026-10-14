@@ -1,3 +1,4 @@
+using Messenger.Contracts.Chats;
 using Messenger.Maui.Services;
 
 namespace Messenger.Maui.Features.Chats;
@@ -6,16 +7,28 @@ public partial class ChatPage : ContentPage
 {
     private readonly ChatViewModel _viewModel;
     private readonly ChatSyncService _sync;
+    private readonly ChatResponse _chat;
+    private readonly Func<Guid, Task>? _openProfile;
     private bool _started;
 
     public Guid CurrentUserId { get; }
 
-    public ChatPage(ChatViewModel viewModel, ChatSyncService sync, Guid currentUserId = default, string title = "Чат")
+    public ChatPage(
+        ChatViewModel viewModel,
+        ChatSyncService sync,
+        ChatResponse chat,
+        Guid currentUserId = default,
+        Func<Guid, Task>? openProfile = null)
     {
         CurrentUserId = currentUserId;
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
         _sync = sync;
+        _chat = chat;
+        _openProfile = openProfile;
+        var title = chat.Type == "direct"
+            ? chat.Peer?.DisplayName ?? "Пользователь"
+            : string.IsNullOrWhiteSpace(chat.Title) ? "Групповой чат" : chat.Title;
         ChatTitle.Text = title;
         HeaderAvatar.Person = title;
     }
@@ -49,6 +62,13 @@ public partial class ChatPage : ContentPage
         MainThread.BeginInvokeOnMainThread(() => _viewModel.SetConnectionState(state));
 
     private async void OnBackClicked(object? sender, EventArgs e) => await Navigation.PopAsync();
+    private async void OnHeaderTapped(object? sender, TappedEventArgs e)
+    {
+        if (_chat.Type == "direct" && _chat.Peer is { } peer && _openProfile is not null)
+        {
+            await RunAsync(_ => _openProfile(peer.UserId));
+        }
+    }
     private void OnToggleSearchClicked(object? sender, EventArgs e)
     {
         SearchPanel.IsVisible = !SearchPanel.IsVisible;

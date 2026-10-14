@@ -1,28 +1,28 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:contacts="clr-namespace:Messenger.Contracts.Contacts;assembly=Messenger.Contracts"
+             xmlns:contacts="clr-namespace:Messenger.Maui.Features.Contacts"
              xmlns:ui="clr-namespace:Messenger.Maui.Controls"
-             x:Class="Messenger.Maui.Features.Contacts.ContactDetailsPage" x:DataType="contacts:ContactResponse"
+             x:Class="Messenger.Maui.Features.Contacts.ContactDetailsPage" x:DataType="contacts:UserDetailsViewModel"
              Title="Информация" Shell.NavBarIsVisible="False" Shell.TabBarIsVisible="False" BackgroundColor="{StaticResource PageBackground}">
     <Grid RowDefinitions="Auto,*">
         <Grid ColumnDefinitions="80,*,90" HeightRequest="44" BackgroundColor="{StaticResource BarBackground}">
             <Button x:Name="BackButton" Text="Назад" Clicked="OnBackClicked" />
             <Label x:Name="HeaderTitle" Grid.Column="1" Text="Информация" Style="{StaticResource NavigationTitle}" />
-            <Button x:Name="EditButton" Grid.Column="2" Text="Ред." Clicked="OnEditClicked" />
+            <Button x:Name="EditButton" Grid.Column="2" Text="Ред." Clicked="OnEditClicked" IsVisible="{Binding CanEdit}" />
         </Grid>
         <ScrollView Grid.Row="1">
             <VerticalStackLayout Spacing="0">
                 <VerticalStackLayout x:Name="InfoPanel" Spacing="0">
                     <Grid BackgroundColor="White" Padding="24">
-                        <ui:AvatarView Person="{Binding .}" WidthRequest="250" HeightRequest="250" HorizontalOptions="Center" />
+                        <ui:AvatarView Person="{Binding User}" WidthRequest="250" HeightRequest="250" HorizontalOptions="Center" />
                     </Grid>
                     <Grid ColumnDefinitions="*,44,44" BackgroundColor="White" Padding="16,14" ColumnSpacing="8">
                         <VerticalStackLayout Spacing="6">
-                            <Label Text="{Binding ., Converter={StaticResource DisplayValue}, ConverterParameter=name}" FontAttributes="Bold" LineBreakMode="WordWrap" />
+                            <Label Text="{Binding DisplayName}" FontAttributes="Bold" LineBreakMode="WordWrap" />
                             <Label Text="{Binding Phone, TargetNullValue='Номер скрыт'}" Style="{StaticResource SecondaryLabel}" />
                         </VerticalStackLayout>
                         <ImageButton Grid.Column="1" Source="tab_chats.png" Clicked="OnChatClicked" BackgroundColor="{StaticResource OutgoingBubble}" CornerRadius="22" SemanticProperties.Description="Написать сообщение" />
-                        <ImageButton Grid.Column="2" Source="icon_phone.png" Clicked="OnCallClicked" BackgroundColor="{StaticResource OutgoingBubble}" CornerRadius="22" SemanticProperties.Description="Позвонить" />
+                        <ImageButton Grid.Column="2" Source="icon_phone.png" Clicked="OnCallClicked" IsEnabled="{Binding CanCall}" BackgroundColor="{StaticResource OutgoingBubble}" CornerRadius="22" SemanticProperties.Description="Позвонить" />
                     </Grid>
                     <BoxView Style="{StaticResource SeparatorLine}" />
                     <VerticalStackLayout Padding="16,14" BackgroundColor="White" Spacing="6">
@@ -36,7 +36,7 @@
                     <BoxView Style="{StaticResource SeparatorLine}" />
                     <Entry x:Name="LastNameEntry" Placeholder="Фамилия" />
                 </VerticalStackLayout>
-                <Grid ColumnDefinitions="*,Auto" BackgroundColor="White" Padding="16,4" Margin="0,20,0,0">
+                <Grid x:Name="MuteRow" ColumnDefinitions="*,Auto" BackgroundColor="White" Padding="16,4" Margin="0,20,0,0" IsVisible="{Binding CanEdit}">
                     <Label Text="Заглушить" VerticalOptions="Center" />
                     <Switch x:Name="MuteSwitch" Grid.Column="1" IsToggled="{Binding IsMuted, Mode=OneWay}" Toggled="OnMuteToggled" />
                 </Grid>

@@ -13,6 +13,7 @@ public interface IConversationApi
     Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default);
+    Task<UserSearchResponse> GetVisibleUserAsync(Guid userId, CancellationToken ct = default);
     Task<IReadOnlyList<MessageResponse>> GetMessagesAsync(Guid chatId, long afterSequence, CancellationToken ct = default);
     Task ReorderFoldersAsync(IReadOnlyList<Guid> folderIds, CancellationToken ct = default);
     Task SetArchivedAsync(Guid chatId, bool value, CancellationToken ct = default);
@@ -51,6 +52,10 @@ public sealed class ConversationClient(HttpClient httpClient) : IConversationApi
     public async Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) =>
         (await httpClient.GetFromJsonAsync<UserSearchPageResponse>(
             $"api/users/search?query={Uri.EscapeDataString(query)}", ct))?.Items ?? [];
+
+    public async Task<UserSearchResponse> GetVisibleUserAsync(Guid userId, CancellationToken ct = default) =>
+        await httpClient.GetFromJsonAsync<UserSearchResponse>($"api/users/{userId}", ct)
+        ?? throw new InvalidDataException("Missing user response.");
 
     public async Task<IReadOnlyList<MessageResponse>> GetMessagesAsync(Guid chatId, long afterSequence, CancellationToken ct = default) =>
         (await httpClient.GetFromJsonAsync<MessagePageResponse>(

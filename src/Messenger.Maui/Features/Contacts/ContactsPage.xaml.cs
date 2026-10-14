@@ -59,23 +59,29 @@ public partial class ContactsPage : ContentPage
         if (sender is ImageButton { CommandParameter: ContactResponse contact }) await ShowContactAsync(contact);
     }
 
-    private Task ShowContactAsync(ContactResponse contact) =>
-        Navigation.PushAsync(new ContactDetailsPage(contact, _viewModel, () => OpenChatAsync(contact.UserId, DisplayValueConverter.Name(contact))));
+    private Task ShowContactAsync(ContactResponse contact) => ShowUserAsync(contact.UserId);
+
+    private Task ShowUserAsync(Guid userId) =>
+        Navigation.PushAsync(new ContactDetailsPage(
+            userId,
+            _services.GetRequiredService<UserDetailsViewModel>(),
+            () => OpenChatAsync(userId)));
 
     private async void OnSearchResultSelected(object? sender, SelectionChangedEventArgs e)
     {
         if (e.CurrentSelection.FirstOrDefault() is not UserSearchResponse user) return;
         ResultsList.SelectedItem = null;
-        await RunAsync(_ => OpenChatAsync(user.UserId, DisplayValueConverter.Name(user)));
+        await RunAsync(_ => OpenChatAsync(user.UserId));
     }
 
-    private async Task OpenChatAsync(Guid userId, string title)
+    private async Task OpenChatAsync(Guid userId)
     {
         var chat = await _api.CreateDirectAsync(userId);
         var session = await _services.GetRequiredService<ISecureSessionStore>().GetAsync();
         await Navigation.PushAsync(new ChatPage(
             new ChatViewModel(chat.Id, _api, _services.GetRequiredService<MediaComposerViewModel>()),
-            _services.GetRequiredService<ChatSyncService>(), session?.Session.UserId ?? Guid.Empty, title));
+            _services.GetRequiredService<ChatSyncService>(), chat,
+            session?.Session.UserId ?? Guid.Empty, ShowUserAsync));
     }
 
     private async Task RunAsync(Func<CancellationToken, Task> action)

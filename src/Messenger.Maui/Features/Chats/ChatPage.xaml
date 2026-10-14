@@ -9,11 +9,16 @@
     <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" BackgroundColor="{StaticResource ChatBackground}">
         <Grid ColumnDefinitions="44,34,*,44,44" ColumnSpacing="4" Padding="0,2,4,2" BackgroundColor="{StaticResource BarBackground}" MinimumHeightRequest="48">
             <ImageButton Source="icon_back.png" Clicked="OnBackClicked" SemanticProperties.Description="Назад к чатам" />
-            <ui:AvatarView x:Name="HeaderAvatar" Grid.Column="1" WidthRequest="32" HeightRequest="32" VerticalOptions="Center" />
-            <VerticalStackLayout Grid.Column="2" VerticalOptions="Center" Spacing="1">
-                <Label x:Name="ChatTitle" FontAttributes="Bold" FontSize="16" LineBreakMode="TailTruncation" />
-                <Label Text="{Binding ConnectionStatus}" FontSize="10" TextColor="{StaticResource TextSecondary}" />
-            </VerticalStackLayout>
+            <Grid Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="34,*" ColumnSpacing="4">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnHeaderTapped" />
+                </Grid.GestureRecognizers>
+                <ui:AvatarView x:Name="HeaderAvatar" WidthRequest="32" HeightRequest="32" VerticalOptions="Center" />
+                <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="1">
+                    <Label x:Name="ChatTitle" FontAttributes="Bold" FontSize="16" LineBreakMode="TailTruncation" />
+                    <Label Text="{Binding ConnectionStatus}" FontSize="10" TextColor="{StaticResource TextSecondary}" />
+                </VerticalStackLayout>
+            </Grid>
             <ImageButton Grid.Column="3" Source="icon_search.png" Clicked="OnToggleSearchClicked" SemanticProperties.Description="Поиск сообщений" />
             <ImageButton Grid.Column="4" Source="icon_more.png" Clicked="OnMoreClicked" SemanticProperties.Description="Действия чата" />
         </Grid>

@@ -1,22 +1,30 @@
-using Messenger.Contracts.Contacts;
-
 namespace Messenger.Maui.Features.Contacts;
 
 public partial class ContactDetailsPage : ContentPage
 {
-    private ContactResponse _contact;
-    private readonly ContactsViewModel _viewModel;
+    private readonly Guid _userId;
+    private readonly UserDetailsViewModel _viewModel;
     private readonly Func<Task> _openChat;
     private bool _updating;
     private bool _editing;
 
-    public ContactDetailsPage(ContactResponse contact, ContactsViewModel viewModel, Func<Task> openChat)
+    public ContactDetailsPage(Guid userId, UserDetailsViewModel viewModel, Func<Task> openChat)
     {
-        _contact = contact;
+        _userId = userId;
         _viewModel = viewModel;
         _openChat = openChat;
         InitializeComponent();
-        BindingContext = contact;
+        BindingContext = viewModel;
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await RunAsync(async () =>
+        {
+            await _viewModel.LoadAsync(_userId);
+            MuteSwitch.IsToggled = _viewModel.IsMuted;
+        });
     }
 
     private async void OnBackClicked(object? sender, EventArgs e)
@@ -30,9 +38,7 @@ public partial class ContactDetailsPage : ContentPage
         if (!_editing) { SetEditing(true); return; }
         await RunAsync(async () =>
         {
-            var saved = await _viewModel.UpdateContactAsync(_contact, FirstNameEntry.Text, LastNameEntry.Text, MuteSwitch.IsToggled);
-            _contact = _contact with { LocalFirstName = saved.LocalFirstName, LocalLastName = saved.LocalLastName, IsMuted = saved.IsMuted };
-            BindingContext = _contact;
+            await _viewModel.SaveAliasAsync(FirstNameEntry.Text, LastNameEntry.Text, MuteSwitch.IsToggled);
             SetEditing(false);
         });
     }
@@ -47,29 +53,30 @@ public partial class ContactDetailsPage : ContentPage
         EditButton.Text = editing ? "Сохранить" : "Ред.";
         if (editing)
         {
-            FirstNameEntry.Text = _contact.LocalFirstName ?? _contact.FirstName;
-            LastNameEntry.Text = _contact.LocalLastName ?? _contact.LastName;
+            FirstNameEntry.Text = _viewModel.Contact?.LocalFirstName ?? _viewModel.User?.FirstName;
+            LastNameEntry.Text = _viewModel.Contact?.LocalLastName ?? _viewModel.User?.LastName;
         }
     }
 
     private async void OnMuteToggled(object? sender, ToggledEventArgs e)
     {
-        if (_updating || e.Value == _contact.IsMuted || _editing) return;
+        if (_updating || e.Value == _viewModel.IsMuted || _editing || !_viewModel.CanEdit) return;
         await RunAsync(async () =>
         {
             _updating = true;
             try
             {
-                await _viewModel.UpdateContactAsync(_contact, _contact.LocalFirstName, _contact.LocalLastName, e.Value);
-                _contact = _contact with { IsMuted = e.Value };
-                BindingContext = _contact;
+                await _viewModel.SaveAliasAsync(
+                    _viewModel.Contact?.LocalFirstName,
+                    _viewModel.Contact?.LocalLastName,
+                    e.Value);
             }
-            finally { _updating = false; MuteSwitch.IsToggled = _contact.IsMuted; }
+            finally { _updating = false; MuteSwitch.IsToggled = _viewModel.IsMuted; }
         });
     }
 
     private async void OnChatClicked(object? sender, EventArgs e) => await RunAsync(_openChat);
-    private async void OnCallClicked(object? sender, EventArgs e) => await RunAsync(() => _viewModel.CallAsync(_contact));
+    private async void OnCallClicked(object? sender, EventArgs e) => await RunAsync(_viewModel.CallAsync);
     private async Task RunAsync(Func<Task> action)
     {
         try { await action(); }

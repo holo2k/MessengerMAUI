@@ -388,6 +388,7 @@ public sealed class ChatSyncAndViewModelTests
         public Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatFolderResponse>>(FolderRows);
         public Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ContactResponse>>([]);
         public Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<UserSearchResponse>>([]);
+        public Task<UserSearchResponse> GetVisibleUserAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<MessageResponse>> GetMessagesAsync(Guid chatId, long afterSequence, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<MessageResponse>>(Messages.Where(message => message.ChatId == chatId && message.Sequence > afterSequence).OrderBy(message => message.Sequence).ToArray());

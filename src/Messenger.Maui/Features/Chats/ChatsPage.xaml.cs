@@ -137,8 +137,14 @@ public partial class ChatsPage : ContentPage
         var store = _services.GetRequiredService<ISecureSessionStore>();
         var session = await store.GetAsync();
         await Navigation.PushAsync(new ChatPage(new ChatViewModel(item.Chat.Id, _api, media), sync,
-            session?.Session.UserId ?? Guid.Empty, item.Title));
+            item.Chat, session?.Session.UserId ?? Guid.Empty, OpenPeerProfileAsync));
     }
+
+    private Task OpenPeerProfileAsync(Guid userId) =>
+        Navigation.PushAsync(new Features.Contacts.ContactDetailsPage(
+            userId,
+            _services.GetRequiredService<Features.Contacts.UserDetailsViewModel>(),
+            () => Navigation.PopAsync()));
 
     private async void OnArchiveClicked(object? sender, EventArgs e) => await ApplyBulkAsync(ChatBulkAction.Archive);
     private async void OnReadClicked(object? sender, EventArgs e) => await ApplyBulkAsync(ChatBulkAction.MarkRead);

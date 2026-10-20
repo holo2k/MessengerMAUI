@@ -14,6 +14,7 @@ public sealed class DisplayValueConverter : IValueConverter, IMultiValueConverte
         return (parameter as string) switch
         {
             "libraryCurrent" or "queueCurrent" => current ? Color.FromArgb("#D7EAFF") : Colors.Transparent,
+            "messageMusicPlayIcon" => current && values.Length > 2 && values[2] is true ? "music_pause_dark.png" : "music_play_dark.png",
             _ => current
         };
     }
@@ -51,6 +52,7 @@ public sealed class DisplayValueConverter : IValueConverter, IMultiValueConverte
 
     public static string MessageText(MessageResponse message) => message.DeletedAt.HasValue
         ? "Сообщение удалено"
+        : message.Type == "music" ? message.MusicTrack is { } track ? $"{track.Title} — {track.Artist}" : "Трек недоступен"
         : message.Body ?? message.Type switch
         {
             "photo" => "Фотография", "video" => "Видео", "audio" => "Аудиосообщение", _ => "Вложение"

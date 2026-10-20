@@ -1,6 +1,7 @@
 using Messenger.Maui.Controls;
 using Messenger.Maui.Features.Music;
 using Microsoft.Extensions.DependencyInjection;
+using Messenger.Maui.Services;
 
 namespace Messenger.Maui;
 
@@ -8,11 +9,19 @@ public partial class AppShell : Shell
 {
     private readonly MusicViewModel _music;
     private readonly Microsoft.Maui.Dispatching.IDispatcherTimer _playbackTimer;
+    private readonly IServiceProvider _services;
+    public MusicViewModel Music => _music;
 
     public AppShell(IServiceProvider services, MusicViewModel music)
     {
         InitializeComponent();
         _music = music;
+        _services = services;
+        var musicRealtime = services.GetRequiredService<IMusicRealtimeClient>();
+        musicRealtime.TrackUpdated += value => MainThread.InvokeOnMainThreadAsync(() => _music.ApplyTrackUpdate(value.Track));
+        musicRealtime.TrackStatusChanged += value => value.Status is "blocked" or "deleted"
+            ? MainThread.InvokeOnMainThreadAsync(() => _music.OnTrackBlockedAsync(value.TrackId, value.Reason))
+            : Task.CompletedTask;
         ChatsTab.ContentTemplate = new DataTemplate(() =>
         {
             var page = services.GetRequiredService<Features.Chats.ChatsPage>();
@@ -37,11 +46,13 @@ public partial class AppShell : Shell
         };
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
         _music.RefreshPlayback();
         _playbackTimer.Start();
+        var session = await _services.GetRequiredService<ISecureSessionStore>().GetAsync();
+        _music.SetCurrentUser(session?.Session.UserId ?? Guid.Empty);
     }
 
     protected override void OnDisappearing()

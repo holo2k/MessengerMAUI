@@ -1,5 +1,7 @@
 using Messenger.Contracts.Messages;
 using Microsoft.Maui.Controls.Shapes;
+using Messenger.Contracts.Music;
+using Messenger.Maui.Features.Music;
 
 namespace Messenger.Maui.Controls;
 
@@ -11,6 +13,11 @@ public sealed class MessageBubble : ContentView
         nameof(CurrentUserId), typeof(Guid), typeof(MessageBubble), Guid.Empty, propertyChanged: Refresh);
     public static readonly BindableProperty ReadSequenceProperty = BindableProperty.Create(
         nameof(ReadSequence), typeof(long), typeof(MessageBubble), 0L, propertyChanged: Refresh);
+    public static readonly BindableProperty PlayerProperty = BindableProperty.Create(
+        nameof(Player), typeof(MusicViewModel), typeof(MessageBubble), null, propertyChanged: Refresh);
+    public MusicViewModel? Player { get => (MusicViewModel?)GetValue(PlayerProperty); set => SetValue(PlayerProperty, value); }
+    public event EventHandler<MusicTrackResponse>? TrackOpened;
+    public event EventHandler<MusicTrackResponse>? TrackPlaybackRequested;
 
     public MessageBubble()
     {
@@ -29,7 +36,39 @@ public sealed class MessageBubble : ContentView
         if (Message is not { } message) return;
         var outgoing = CurrentUserId != Guid.Empty && message.SenderUserId == CurrentUserId;
         var stack = new VerticalStackLayout { Spacing = 3 };
-        stack.Add(new Label { Text = DisplayValueConverter.MessageText(message), FontSize = 16, LineBreakMode = LineBreakMode.WordWrap });
+        if (message.DeletedAt is null && message.MusicTrack is { } track)
+        {
+            var card = new Grid { ColumnDefinitions = [new(54), new(GridLength.Star), new(40)], ColumnSpacing = 10, MinimumWidthRequest = 230, Padding = new Thickness(0, 4) };
+            var artwork = new Grid { WidthRequest = 54, HeightRequest = 54 };
+            artwork.Add(new MusicArtworkView { Track = track });
+            var openArtwork = new TapGestureRecognizer();
+            openArtwork.Tapped += (_, _) => TrackOpened?.Invoke(this, track);
+            artwork.GestureRecognizers.Add(openArtwork);
+            card.Add(artwork);
+            var info = new VerticalStackLayout { Spacing = 3, VerticalOptions = LayoutOptions.Center };
+            info.Add(new Label { Text = track.Title, FontSize = 15, FontAttributes = FontAttributes.Bold, LineBreakMode = LineBreakMode.TailTruncation });
+            info.Add(new Label { Text = track.Artist, FontSize = 13, TextColor = Color.FromArgb("#929292"), LineBreakMode = LineBreakMode.TailTruncation });
+            info.Add(new Label { Text = Services.PlaybackTime.Format(track.DurationMs), FontSize = 11, TextColor = Color.FromArgb("#929292") });
+            var open = new TapGestureRecognizer();
+            open.Tapped += (_, _) => TrackOpened?.Invoke(this, track);
+            info.GestureRecognizers.Add(open);
+            card.Add(info, 1);
+            var play = new ImageButton { Source = "music_play_dark.png", WidthRequest = 40, HeightRequest = 44, Padding = 10, BackgroundColor = Colors.Transparent };
+            SemanticProperties.SetDescription(play, "Воспроизвести или приостановить песню");
+            if (Player is not null)
+            {
+                var binding = new MultiBinding { Converter = new DisplayValueConverter(), ConverterParameter = "messageMusicPlayIcon" };
+                binding.Bindings.Add(new Binding(nameof(MusicTrackResponse.Id), source: track));
+                binding.Bindings.Add(new Binding("CurrentTrack.Id", source: Player));
+                binding.Bindings.Add(new Binding(nameof(MusicViewModel.IsPlaying), source: Player));
+                play.SetBinding(ImageButton.SourceProperty, binding);
+            }
+            play.Clicked += (_, _) => TrackPlaybackRequested?.Invoke(this, track);
+            card.Add(play, 2);
+            stack.Add(card);
+        }
+        else
+            stack.Add(new Label { Text = DisplayValueConverter.MessageText(message), FontSize = 16, LineBreakMode = LineBreakMode.WordWrap });
         var metadata = new HorizontalStackLayout { Spacing = 4, HorizontalOptions = LayoutOptions.End };
         metadata.Add(new Label
         {

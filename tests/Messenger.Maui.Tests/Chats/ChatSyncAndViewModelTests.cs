@@ -3,6 +3,7 @@ using Messenger.Contracts.Contacts;
 using Messenger.Contracts.Messages;
 using Messenger.Contracts.Realtime;
 using Messenger.Contracts.Media;
+using Messenger.Contracts.Music;
 using Messenger.Maui.Features.Chats;
 using Messenger.Maui.Features.Contacts;
 using Messenger.Maui.Services;
@@ -459,6 +460,27 @@ public sealed class ChatSyncAndViewModelTests
 
         Assert.Equal([nextChat], received);
         Assert.Equal([previousChat, nextChat], realtime.JoinedChats);
+    }
+
+    [Fact]
+    public void Shared_track_cover_updates_in_messages_search_and_pins_without_changing_the_message_identity()
+    {
+        var chatId = Guid.NewGuid();
+        var track = new MusicTrackResponse(Guid.NewGuid(), "Песня", "Автор", 1000, null, "available");
+        var message = Message(chatId, 1) with { Type = "music", MusicTrack = track };
+        var viewModel = new ChatViewModel(chatId, new FakeConversationApi());
+        viewModel.Messages.Add(message);
+        viewModel.SearchResults.Add(message);
+        viewModel.Pins.Add(message);
+        var cover = Guid.NewGuid();
+
+        viewModel.ApplyMusicTrack(track with { CoverObjectId = cover });
+
+        Assert.All(new[] { viewModel.Messages, viewModel.SearchResults, viewModel.Pins }, rows =>
+        {
+            Assert.Equal(message.Id, Assert.Single(rows).Id);
+            Assert.Equal(cover, rows[0].MusicTrack!.CoverObjectId);
+        });
     }
 
     private static MessageResponse Message(Guid chatId, long sequence) => new(

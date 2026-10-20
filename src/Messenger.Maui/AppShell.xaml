@@ -6,11 +6,11 @@
     xmlns:local="clr-namespace:Messenger.Maui"
     Title="Мессенджер">
 
-    <TabBar>
-        <ShellContent x:Name="ChatsTab" Title="Чаты" Icon="tab_chats.png" Route="Chats" />
+    <TabBar x:Name="MainTabs">
         <ShellContent x:Name="ContactsTab" Title="Контакты" Icon="tab_contacts.png" Route="Contacts" />
-        <ShellContent x:Name="SettingsTab" Title="Настройки" Icon="tab_settings.png" Route="Settings" />
+        <ShellContent x:Name="ChatsTab" Title="Чаты" Icon="tab_chats.png" Route="Chats" />
         <ShellContent x:Name="MusicTab" Title="Музыка" Icon="tab_music.png" Route="Music" />
+        <ShellContent x:Name="SettingsTab" Title="Настройки" Icon="tab_settings.png" Route="Settings" />
     </TabBar>
 
 </Shell>

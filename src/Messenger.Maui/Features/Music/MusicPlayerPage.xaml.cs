@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Messenger.Contracts.Music;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Messenger.Maui.Features.Music;
 
@@ -128,18 +129,13 @@ public partial class MusicPlayerPage : ContentPage
     private void OnArtworkAreaSizeChanged(object? sender, EventArgs e)
     {
         if (ArtworkArea.Width <= 0) return;
-        var size = Math.Clamp(Math.Min(ArtworkArea.Width, Height * 0.3), 140, 240);
-        HeroArtwork.WidthRequest = HeroArtwork.HeightRequest = size;
+        HeroArtwork.HeightRequest = ArtworkArea.Width;
     }
 
     private async void OnCurrentTrackMenuClicked(object? sender, EventArgs e)
     {
         if (_viewModel.CurrentTrack is not { } track) return;
-        var saved = _viewModel.IsCurrentTrackSaved;
-        var libraryAction = saved ? "Убрать из моей музыки" : "Добавить в мою музыку";
-        var action = await DisplayActionSheetAsync(track.Title, "Отмена", null, libraryAction, "Скачать трек");
-        if (action == libraryAction) await SafeAsync(ct => saved ? _viewModel.RemoveAsync(track, ct) : _viewModel.AddAsync(track, ct));
-        if (action == "Скачать трек") await SafeAsync(ct => _viewModel.DownloadAsync(track, ct));
+        await SafeAsync(_ => Handler!.MauiContext!.Services.GetRequiredService<MusicTrackActions>().ShowAsync(this, _viewModel, track));
     }
 
     private async Task SafeAsync(Func<CancellationToken, Task> action)

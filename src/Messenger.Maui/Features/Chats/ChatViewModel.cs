@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Messenger.Contracts.Messages;
 using Messenger.Contracts.Media;
+using Messenger.Contracts.Chats;
+using Messenger.Contracts.Realtime;
 using Messenger.Maui.Services;
 
 namespace Messenger.Maui.Features.Chats;
@@ -10,6 +12,11 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api, MediaCompos
 {
     private string _composerText = string.Empty;
     private string _connectionStatus = "Не подключено";
+    private readonly Dictionary<Guid, long> _readPositions = [];
+    private readonly SemaphoreSlim _readLock = new(1, 1);
+    private Guid _currentUserId;
+    private long _readSequence, _lastMarkedRead;
+    private bool _hasReadSnapshot;
 
     public ObservableCollection<MessageResponse> Messages { get; } = [];
     public ObservableCollection<MessageResponse> SearchResults { get; } = [];
@@ -19,6 +26,51 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api, MediaCompos
     public MediaComposerViewModel? Media { get; } = media;
     public string ComposerText { get => _composerText; set => SetProperty(ref _composerText, value); }
     public string ConnectionStatus { get => _connectionStatus; private set => SetProperty(ref _connectionStatus, value); }
+    public long ReadSequence { get => _readSequence; private set => SetProperty(ref _readSequence, value); }
+
+    public void SetCurrentUser(Guid userId)
+    {
+        _currentUserId = userId;
+        UpdateReadSequence();
+    }
+
+    public void ApplyReadPositions(IReadOnlyList<ChatMemberResponse> members)
+    {
+        _hasReadSnapshot = true;
+        var activeIds = members.Select(member => member.UserId).ToHashSet();
+        foreach (var userId in _readPositions.Keys.Where(id => !activeIds.Contains(id)).ToArray())
+            _readPositions.Remove(userId);
+        foreach (var member in members)
+            _readPositions[member.UserId] = Math.Max(_readPositions.GetValueOrDefault(member.UserId), member.LastReadSequence);
+        _lastMarkedRead = Math.Max(_lastMarkedRead, _readPositions.GetValueOrDefault(_currentUserId));
+        UpdateReadSequence();
+    }
+
+    public void ApplyReadPosition(ReadPositionChangedEvent position)
+    {
+        if (position.ChatId != chatId || position.UserId == Guid.Empty || position.Sequence < 0) return;
+        _readPositions[position.UserId] = Math.Max(_readPositions.GetValueOrDefault(position.UserId), position.Sequence);
+        if (position.UserId == _currentUserId) _lastMarkedRead = Math.Max(_lastMarkedRead, position.Sequence);
+        UpdateReadSequence();
+    }
+
+    private void UpdateReadSequence() => ReadSequence = !_hasReadSnapshot || _currentUserId == Guid.Empty ? 0 :
+        _readPositions.Where(position => position.Key != _currentUserId)
+            .Select(position => position.Value).DefaultIfEmpty(0).Min();
+
+    public async Task MarkVisibleReadAsync(long sequence, CancellationToken cancellationToken = default)
+    {
+        if (_currentUserId == Guid.Empty || sequence <= _lastMarkedRead) return;
+        sequence = Math.Min(sequence, Messages.Select(message => message.Sequence).DefaultIfEmpty(0).Max());
+        await _readLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (sequence <= _lastMarkedRead) return;
+            await api.MarkReadAsync(chatId, sequence, cancellationToken);
+            _lastMarkedRead = Math.Max(_lastMarkedRead, sequence);
+        }
+        finally { _readLock.Release(); }
+    }
 
     public void SetConnectionState(ChatConnectionState state) => ConnectionStatus = state switch
     {
@@ -56,7 +108,7 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api, MediaCompos
                 string.IsNullOrWhiteSpace(body) ? null : body,
                 uploaded.Select(item => item.StoredObject!.Id).ToArray(),
                 cancellationToken);
-        Messages.Add(sent);
+        Receive(sent);
         ComposerText = string.Empty;
         Media?.Attachments.Clear();
     }

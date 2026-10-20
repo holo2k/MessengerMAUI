@@ -2,6 +2,8 @@ using Messenger.Application.Chats;
 using Messenger.Application.Security;
 using Messenger.Domain.Chats;
 using Messenger.Domain.Common;
+using Messenger.Domain.Music;
+using Messenger.Application.Tests.Music;
 
 namespace Messenger.Application.Tests.Chats;
 
@@ -100,6 +102,40 @@ public sealed class MessageServiceTests
         Assert.Equal(Fixture.Now.AddMinutes(1), member.LeftAt);
     }
 
+    [Fact]
+    public async Task Shared_music_preserves_the_track_and_current_cover_without_copying_audio()
+    {
+        var fixture = new Fixture(ChatType.Direct);
+        var uploader = Guid.NewGuid();
+        var track = new MusicTrack(Guid.NewGuid(), uploader, Guid.NewGuid(), "Песня", "Автор", 1000, Guid.NewGuid(), Fixture.Now);
+        fixture.Music.Tracks.Add(track);
+        var clientId = Guid.NewGuid();
+        var sent = await fixture.Service.SendMusicAsync(fixture.UserId, fixture.Chat.Id, clientId, track.Id);
+        var retry = await fixture.Service.SendMusicAsync(fixture.UserId, fixture.Chat.Id, clientId, track.Id);
+        Assert.Equal(sent.Message.Id, retry.Message.Id);
+        Assert.Single(fixture.Store.Messages);
+        Assert.Equal(track.Id, sent.Message.MusicTrackId);
+        Assert.Equal(MessageKind.Music, sent.Message.Kind);
+        Assert.Equal("Песня — Автор", sent.Body);
+        var cover = Guid.NewGuid();
+        track.UpdateCover(uploader, cover, Fixture.Now);
+        var received = Assert.Single(await fixture.Service.ListAsync(fixture.OtherUserId, fixture.Chat.Id, 0, 20));
+        Assert.Equal(cover, received.MusicTrack!.CoverObjectId);
+        track.Block(Fixture.Now);
+        Assert.Null(Assert.Single(await fixture.Service.ListAsync(fixture.OtherUserId, fixture.Chat.Id, 0, 20)).MusicTrack);
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.SendMusicAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), track.Id));
+    }
+
+    [Fact]
+    public async Task Music_messages_require_an_available_track_and_chat_membership()
+    {
+        var fixture = new Fixture();
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.SendMusicAsync(Guid.NewGuid(), fixture.Chat.Id, Guid.NewGuid(), Guid.NewGuid()));
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.SendMusicAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), Guid.NewGuid()));
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Music, "fake"));
+        Assert.Empty(fixture.Store.Messages);
+    }
+
     private sealed class Fixture
     {
         public static readonly DateTimeOffset Now = new(2026, 10, 3, 8, 0, 0, TimeSpan.Zero);
@@ -116,13 +152,14 @@ public sealed class MessageServiceTests
             {
                 Store.Members.Add(new ChatMember(Chat.Id, OtherUserId, ChatMemberRole.Member, Now));
             }
-            Service = new MessageService(Store, Store, Cipher, new TestIndex(), new Clock());
+            Service = new MessageService(Store, Store, Cipher, new TestIndex(), new Clock(), Music);
         }
 
         public Guid UserId { get; }
         public Guid OtherUserId { get; }
         public Chat Chat { get; }
         public MemoryMessageStore Store { get; } = new();
+        public MemoryMusicStore Music { get; } = new();
         public TestCipher Cipher { get; } = new();
         public MessageService Service { get; }
     }

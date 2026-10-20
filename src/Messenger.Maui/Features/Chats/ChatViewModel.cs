@@ -4,6 +4,7 @@ using Messenger.Contracts.Messages;
 using Messenger.Contracts.Media;
 using Messenger.Contracts.Chats;
 using Messenger.Contracts.Realtime;
+using Messenger.Contracts.Music;
 using Messenger.Maui.Services;
 
 namespace Messenger.Maui.Features.Chats;
@@ -146,5 +147,13 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api, MediaCompos
         {
             Messages.Add(message);
         }
+    }
+
+    public void ApplyMusicTrack(MusicTrackResponse track)
+    {
+        foreach (var rows in new[] { Messages, SearchResults, Pins })
+            for (var index = 0; index < rows.Count; index++)
+                if (rows[index].MusicTrack?.Id == track.Id)
+                    rows[index] = rows[index] with { MusicTrack = track };
     }
 }

@@ -59,6 +59,69 @@ public sealed class SignalRTests : IAsyncLifetime
         Assert.False(outsiderEvents.Reader.TryRead(out _));
     }
 
+    [Fact]
+    public async Task Read_receipts_are_committed_bounded_monotonic_and_only_visible_to_chat_members()
+    {
+        await using var factory = await CreateFactoryAsync();
+        using var senderClient = factory.CreateClient();
+        using var readerClient = factory.CreateClient();
+        using var outsiderClient = factory.CreateClient();
+        var sender = await RegisterAsync(senderClient, "+79990000511");
+        var reader = await RegisterAsync(readerClient, "+79990000512");
+        var outsider = await RegisterAsync(outsiderClient, "+79990000513");
+        Authorize(senderClient, sender);
+        Authorize(readerClient, reader);
+        Authorize(outsiderClient, outsider);
+        var receipts = Channel.CreateUnbounded<ReadPositionChangedEvent>();
+        var outsiderReceipts = Channel.CreateUnbounded<ReadPositionChangedEvent>();
+        await using var senderConnection = Connection(factory, sender.AccessToken);
+        await using var outsiderConnection = Connection(factory, outsider.AccessToken);
+        senderConnection.On<ReadPositionChangedEvent>("ReadPositionChanged", value => receipts.Writer.TryWrite(value));
+        outsiderConnection.On<ReadPositionChangedEvent>("ReadPositionChanged", value => outsiderReceipts.Writer.TryWrite(value));
+        await senderConnection.StartAsync();
+        await outsiderConnection.StartAsync();
+        await senderConnection.InvokeAsync("Ready");
+        await outsiderConnection.InvokeAsync("Ready");
+
+        var chat = await PostAsync<ChatResponse>(senderClient, "/api/chats/direct", new CreateDirectChatRequest(reader.UserId));
+        await senderConnection.InvokeAsync("JoinChat", chat.Id);
+        await Assert.ThrowsAsync<Microsoft.AspNetCore.SignalR.HubException>(() => outsiderConnection.InvokeAsync("JoinChat", chat.Id));
+        await PostAsync<MessageResponse>(senderClient, $"/api/chats/{chat.Id}/messages", new SendMessageRequest(Guid.NewGuid(), "text", "First"));
+        await PostAsync<MessageResponse>(senderClient, $"/api/chats/{chat.Id}/messages", new SendMessageRequest(Guid.NewGuid(), "text", "Second"));
+
+        (await readerClient.PutAsJsonAsync($"/api/chats/{chat.Id}/read", new ReadChatRequest(1))).EnsureSuccessStatusCode();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var receipt = await receipts.Reader.ReadAsync(timeout.Token);
+        Assert.Equal(new ReadPositionChangedEvent(chat.Id, reader.UserId, 1), receipt);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MessengerDbContext>();
+            Assert.Equal(1, await db.ChatMembers.Where(member => member.ChatId == chat.Id && member.UserId == reader.UserId)
+                .Select(member => member.LastReadSequence).SingleAsync());
+        }
+        var members = await senderClient.GetFromJsonAsync<ChatMemberResponse[]>($"/api/chats/{chat.Id}/members");
+        Assert.Equal(1, members!.Single(member => member.UserId == reader.UserId).LastReadSequence);
+
+        (await readerClient.PutAsJsonAsync($"/api/chats/{chat.Id}/read", new ReadChatRequest(0))).EnsureSuccessStatusCode();
+        Assert.Equal(1, (await receipts.Reader.ReadAsync(timeout.Token)).Sequence);
+        (await readerClient.PutAsJsonAsync($"/api/chats/{chat.Id}/read", new ReadChatRequest(long.MaxValue))).EnsureSuccessStatusCode();
+        Assert.Equal(2, (await receipts.Reader.ReadAsync(timeout.Token)).Sequence);
+
+        var concurrent = await Task.WhenAll(Enumerable.Range(0, 6).Select(index =>
+            readerClient.PutAsJsonAsync($"/api/chats/{chat.Id}/read", new ReadChatRequest(index % 2 == 0 ? 1 : 2))));
+        Assert.All(concurrent, response => Assert.True(response.IsSuccessStatusCode));
+        members = await senderClient.GetFromJsonAsync<ChatMemberResponse[]>($"/api/chats/{chat.Id}/members");
+        Assert.NotNull(members);
+        Assert.Equal(2, members.Single(member => member.UserId == reader.UserId).LastReadSequence);
+        Assert.Equal(0, members.Single(member => member.UserId == sender.UserId).LastReadSequence);
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound,
+            (await outsiderClient.PutAsJsonAsync($"/api/chats/{chat.Id}/read", new ReadChatRequest(2))).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.NotFound,
+            (await outsiderClient.GetAsync($"/api/chats/{chat.Id}/members")).StatusCode);
+        Assert.False(outsiderReceipts.Reader.TryRead(out _));
+    }
+
     private static HubConnection Connection(MessengerApiFactory factory, string token) =>
         new HubConnectionBuilder().WithUrl("http://localhost/hubs/chat", options =>
         {

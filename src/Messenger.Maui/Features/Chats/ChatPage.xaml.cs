@@ -19,6 +19,7 @@ public partial class ChatPage : ContentPage
     private bool _isActive, _windowActive;
     private int _lastVisibleIndex = -1;
     private Window? _window;
+    private AttachmentPickerView? _attachmentPicker;
     public MusicViewModel? Music { get; private set; }
 
     public Guid CurrentUserId { get; }
@@ -34,6 +35,7 @@ public partial class ChatPage : ContentPage
         CurrentUserId = currentUserId;
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
+        if (viewModel.Media is not null) viewModel.Media.Attachments.CollectionChanged += (_, _) => UpdateComposer();
         _viewModel.SetCurrentUser(currentUserId);
         MessagesList.PropertyChanged += (_, e) =>
         {
@@ -93,6 +95,7 @@ public partial class ChatPage : ContentPage
     protected override void OnDisappearing()
     {
         _isActive = _windowActive = false;
+        CloseAttachmentPicker();
         if (Music is not null) Music.TrackUpdated -= _viewModel.ApplyMusicTrack;
         _lastVisibleIndex = -1;
         if (_window is not null)
@@ -129,6 +132,7 @@ public partial class ChatPage : ContentPage
     {
         _windowActive = true;
         await MarkVisibleMessagesReadAsync();
+        if (_attachmentPicker is { } picker) await picker.RefreshOnResumeAsync();
     }
     private void OnWindowDeactivated(object? sender, EventArgs e) => _windowActive = false;
     private void OnMessagesLoaded(object? sender, EventArgs e) => Dispatcher.Dispatch(ScrollToLatestMessage);
@@ -144,7 +148,7 @@ public partial class ChatPage : ContentPage
     }
     private async Task MarkVisibleMessagesReadAsync()
     {
-        if (!_isActive || !_windowActive || _lastVisibleIndex < 0 ||
+        if (!_isActive || !_windowActive || _attachmentPicker is not null || _lastVisibleIndex < 0 ||
             MessagesList.ItemsSource is not IList<MessageResponse> messages || _lastVisibleIndex >= messages.Count) return;
         try { await _viewModel.MarkVisibleReadAsync(messages[_lastVisibleIndex].Sequence); }
         catch (Exception exception) { System.Diagnostics.Debug.WriteLine($"Read receipt: {exception.Message}"); }
@@ -179,8 +183,24 @@ public partial class ChatPage : ContentPage
     }
     private async void OnAttachClicked(object? sender, EventArgs e)
     {
-        var action = await DisplayActionSheetAsync("Прикрепить", "Отмена", null, "Музыка", "Файл", "Фото", "Видео", "Аудио");
-        if (action == "Музыка")
+        if (_attachmentPicker is not null) { CloseAttachmentPicker(); return; }
+        ComposerEntry.Unfocus();
+        var gallery = Handler!.MauiContext!.Services.GetRequiredService<IGalleryService>();
+        var picker = new AttachmentPickerView(gallery, Math.Max(0, MediaComposerViewModel.MaxAttachments - (_viewModel.Media?.Attachments.Count ?? 0)));
+        _attachmentPicker = picker;
+        picker.CloseRequested += CloseAttachmentPicker;
+        picker.AttachRequested += AttachGalleryItemsAsync;
+        picker.ActionRequested += OnAttachmentActionAsync;
+        AttachmentPickerHost.Content = picker;
+        AttachmentOverlay.IsVisible = true;
+        OnAttachmentOverlaySizeChanged(this, EventArgs.Empty);
+        await picker.OpenAsync();
+    }
+
+    private async Task OnAttachmentActionAsync(AttachmentPickerAction action)
+    {
+        CloseAttachmentPicker();
+        if (action == AttachmentPickerAction.Music)
         {
             var api = Handler!.MauiContext!.Services.GetRequiredService<IMusicApi>();
             var clientIds = new Dictionary<Guid, Guid>();
@@ -191,8 +211,53 @@ public partial class ChatPage : ContentPage
             }));
             return;
         }
-        var kind = action switch { "Файл" => MediaKind.File, "Фото" => MediaKind.Photo, "Видео" => MediaKind.Video, "Аудио" => MediaKind.Audio, _ => (MediaKind?)null };
-        if (kind.HasValue) await RunMediaAsync(kind.Value);
+        await RunMediaAsync(MediaKind.File);
+    }
+
+    private async Task AttachGalleryItemsAsync(IReadOnlyList<MediaSelection> items)
+    {
+        CloseAttachmentPicker();
+        if (_viewModel.Media is null) return;
+        await RunAsync(ct => _viewModel.Media.AddSelectionsAsync(items, ct));
+        UpdateComposer();
+        if (_viewModel.Media.Status is { Length: > 0 } status) await DisplayAlertAsync("Вложение", status, "OK");
+    }
+
+    private void CloseAttachmentPicker()
+    {
+        if (_attachmentPicker is not { } picker) return;
+        _attachmentPicker = null;
+        picker.CloseRequested -= CloseAttachmentPicker;
+        picker.AttachRequested -= AttachGalleryItemsAsync;
+        picker.ActionRequested -= OnAttachmentActionAsync;
+        picker.Close();
+        AttachmentOverlay.IsVisible = false;
+        AttachmentPickerHost.Content = null;
+        Dispatcher.Dispatch(async () => await MarkVisibleMessagesReadAsync());
+    }
+
+    private void OnAttachmentBackdropTapped(object? sender, TappedEventArgs e) => CloseAttachmentPicker();
+    private void OnAttachmentOverlaySizeChanged(object? sender, EventArgs e) =>
+        AttachmentSheet.HeightRequest = Math.Min(Math.Max(340, Height * 0.7), Math.Max(0, Height - 24));
+
+    protected override bool OnBackButtonPressed()
+    {
+        if (_attachmentPicker is null) return base.OnBackButtonPressed();
+        CloseAttachmentPicker();
+        return true;
+    }
+
+    private async void OnAttachmentTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Parameter is not ComposerAttachment { State: UploadItemState.Failed } item || _viewModel.Media is null) return;
+        await RunAsync(ct => _viewModel.Media.RetryAsync(item, ct));
+        UpdateComposer();
+    }
+
+    private void OnRemoveAttachmentClicked(object? sender, EventArgs e)
+    {
+        if (sender is Button { CommandParameter: ComposerAttachment item }) _viewModel.Media?.Attachments.Remove(item);
+        UpdateComposer();
     }
 
     private async void OnMusicTrackOpened(object? sender, MusicTrackResponse track) => await RunAsync(async ct =>
@@ -218,6 +283,7 @@ public partial class ChatPage : ContentPage
         if (SendButton is null) return;
         var canSend = !string.IsNullOrWhiteSpace(ComposerEntry.Text) || _viewModel?.Media?.Attachments.Count > 0;
         SendButton.IsVisible = canSend;
+        SendButton.IsEnabled = _viewModel?.Media?.Attachments.All(item => item.State == UploadItemState.Uploaded) != false;
         AudioButton.IsVisible = !canSend;
     }
 

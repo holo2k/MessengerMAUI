@@ -24,6 +24,7 @@ public interface IMusicService
 {
     Task<MusicTrack> CreateAsync(Guid actorId, Guid audioObjectId, string title, string artist, long durationMs, Guid? coverObjectId, CancellationToken ct = default);
     Task DeclareRightsAsync(Guid actorId, Guid trackId, string statement, CancellationToken ct = default);
+    Task<MusicTrack> UpdateCoverAsync(Guid actorId, Guid trackId, Guid coverObjectId, CancellationToken ct = default);
     Task<IReadOnlyList<MusicTrack>> SearchAsync(Guid actorId, string query, CancellationToken ct = default);
     Task<IReadOnlyList<MusicTrack>> ListLibraryAsync(Guid actorId, CancellationToken ct = default);
     Task AddToLibraryAsync(Guid actorId, Guid trackId, CancellationToken ct = default);

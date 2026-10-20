@@ -25,7 +25,7 @@ public sealed record ChatResponse(
     ChatPeerResponse? Peer = null,
     ChatLastMessageResponse? LastMessage = null);
 public sealed record ChatPageResponse(IReadOnlyList<ChatResponse> Items, string? NextCursor);
-public sealed record ChatMemberResponse(Guid UserId, string Role, DateTimeOffset JoinedAt);
+public sealed record ChatMemberResponse(Guid UserId, string Role, DateTimeOffset JoinedAt, long LastReadSequence = 0);
 public sealed record AddChatMemberRequest(Guid UserId);
 public sealed record UpdateChatMemberRequest(string Role);
 public sealed record ChatFlagRequest(bool Value);

@@ -1,4 +1,5 @@
 using Messenger.Contracts.Chats;
+using Messenger.Maui.Controls;
 using Messenger.Maui.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,6 +25,12 @@ public partial class ChatsPage : ContentPage
         _api = api;
         _services = services;
         _listSync = listSync;
+    }
+
+    public void SetMiniPlayer(MiniPlayerView miniPlayer)
+    {
+        MiniPlayerHost.Content = miniPlayer;
+        MiniPlayerHost.SetBinding(IsVisibleProperty, new Binding(nameof(MiniPlayerView.IsVisible), source: miniPlayer));
     }
 
     public bool IsEditing
@@ -93,25 +100,6 @@ public partial class ChatsPage : ContentPage
         LargeTitle.IsVisible = BulkBar.IsVisible = IsEditing;
         Shell.SetTabBarIsVisible(this, !IsEditing);
         ChatsList.SelectedItems.Clear();
-    }
-
-    private void OnAllFolderClicked(object? sender, EventArgs e) => SelectFolder(null);
-    private void OnFolderClicked(object? sender, EventArgs e)
-    {
-        if (sender is Button { CommandParameter: ChatFolderResponse folder }) SelectFolder(folder.Id);
-    }
-
-    private void SelectFolder(Guid? folderId)
-    {
-        _viewModel.SelectFolder(folderId);
-        AllFolderButton.BackgroundColor = folderId is null ? Color.FromArgb("#D7EAFF") : Colors.Transparent;
-        AllFolderButton.TextColor = folderId is null ? Color.FromArgb("#0088FF") : Color.FromArgb("#929292");
-        foreach (var button in FolderButtons.Children.OfType<Button>())
-        {
-            var selected = button.CommandParameter is ChatFolderResponse folder && folder.Id == folderId;
-            button.BackgroundColor = selected ? Color.FromArgb("#D7EAFF") : Colors.Transparent;
-            button.TextColor = Color.FromArgb(selected ? "#0088FF" : "#929292");
-        }
     }
 
     private async void OnNewChatClicked(object? sender, EventArgs e) =>

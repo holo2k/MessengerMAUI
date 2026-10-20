@@ -1,8 +1,9 @@
 using Messenger.Domain.Chats;
+using Messenger.Domain.Music;
 
 namespace Messenger.Application.Chats;
 
-public sealed record MessageView(Message Message, string? Body, bool IsPinned);
+public sealed record MessageView(Message Message, string? Body, bool IsPinned, MusicTrack? MusicTrack = null);
 
 public interface IMessageStore
 {
@@ -37,6 +38,8 @@ public interface IMessageStore
 
 public interface IMessageService
 {
+    Task<MessageView> SendMusicAsync(Guid senderUserId, Guid chatId, Guid clientMessageId, Guid trackId,
+        CancellationToken cancellationToken = default);
     Task<MessageView> SendAsync(
         Guid senderUserId,
         Guid chatId,

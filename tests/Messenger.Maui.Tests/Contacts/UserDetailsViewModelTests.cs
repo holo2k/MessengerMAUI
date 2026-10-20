@@ -145,6 +145,8 @@ public sealed class UserDetailsViewModelTests
 
         public Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatResponse>>([]);
         public Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ChatMemberResponse>> GetChatMembersAsync(Guid chatId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<ChatMemberResponse>>([]);
         public Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatFolderResponse>>([]);
         public Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<UserSearchResponse>>([]);
         public Task<IReadOnlyList<MessageResponse>> GetMessagesAsync(Guid chatId, long afterSequence, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MessageResponse>>([]);

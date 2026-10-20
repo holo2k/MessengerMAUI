@@ -10,10 +10,20 @@ public sealed class MusicService(IMusicStore store, IUploadService uploads, IClo
         long durationMs, Guid? coverObjectId, CancellationToken ct = default)
     {
         await uploads.ValidateOwnedAvailableAsync(actorId, audioObjectId, ct);
-        if (coverObjectId is { } cover) await uploads.ValidateOwnedAvailableAsync(actorId, cover, ct);
+        if (coverObjectId is { } cover) await uploads.ValidateOwnedImageAsync(actorId, cover, ct);
         var track = new MusicTrack(Guid.NewGuid(), actorId, audioObjectId, title, artist, durationMs, coverObjectId, clock.UtcNow);
         await store.AddTrackAsync(track, ct);
         await store.AddLibraryAsync(new UserMusicTrack(actorId, track.Id, clock.UtcNow), ct);
+        await store.SaveChangesAsync(ct);
+        return track;
+    }
+
+    public async Task<MusicTrack> UpdateCoverAsync(Guid actorId, Guid trackId, Guid coverObjectId, CancellationToken ct = default)
+    {
+        var track = await RequireAvailableAsync(trackId, ct);
+        if (track.UploaderUserId != actorId) throw new MusicRuleException(MusicRuleError.Forbidden);
+        await uploads.ValidateOwnedImageAsync(actorId, coverObjectId, ct);
+        track.UpdateCover(actorId, coverObjectId, clock.UtcNow);
         await store.SaveChangesAsync(ct);
         return track;
     }

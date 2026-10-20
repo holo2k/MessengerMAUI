@@ -357,6 +357,110 @@ public sealed class ChatSyncAndViewModelTests
         Assert.Equal("tel:+79991234567", dialer.LastUri);
     }
 
+    [Fact]
+    public void Read_indicator_ignores_own_receipts_and_waits_for_every_other_group_member()
+    {
+        var chatId = Guid.NewGuid();
+        var self = Guid.NewGuid();
+        var peer = Guid.NewGuid();
+        var third = Guid.NewGuid();
+        var viewModel = new ChatViewModel(chatId, new FakeConversationApi());
+        viewModel.SetCurrentUser(self);
+        viewModel.ApplyReadPosition(new(chatId, peer, 1));
+        Assert.Equal(0, viewModel.ReadSequence);
+        viewModel.ApplyReadPositions([new(self, "member", DateTimeOffset.UtcNow, 50), new(peer, "member", DateTimeOffset.UtcNow)]);
+        Assert.Equal(1, viewModel.ReadSequence);
+        viewModel.ApplyReadPosition(new(chatId, peer, 6));
+        viewModel.ApplyReadPosition(new(Guid.NewGuid(), peer, 99));
+        viewModel.ApplyReadPosition(new(chatId, peer, 2));
+        viewModel.ApplyReadPositions([new(self, "member", DateTimeOffset.UtcNow, 50), new(peer, "member", DateTimeOffset.UtcNow, 1)]);
+        Assert.Equal(6, viewModel.ReadSequence);
+
+        viewModel.ApplyReadPositions([new(self, "owner", DateTimeOffset.UtcNow, 50),
+            new(peer, "member", DateTimeOffset.UtcNow, 6), new(third, "member", DateTimeOffset.UtcNow)]);
+        Assert.Equal(0, viewModel.ReadSequence);
+        viewModel.ApplyReadPosition(new(chatId, third, 4));
+        Assert.Equal(4, viewModel.ReadSequence);
+        viewModel.ApplyReadPosition(new(chatId, third, 8));
+        Assert.Equal(6, viewModel.ReadSequence);
+    }
+
+    [Fact]
+    public async Task Visible_read_receipts_do_not_acknowledge_unseen_messages_and_retry_after_failure()
+    {
+        var chatId = Guid.NewGuid();
+        var api = new FakeConversationApi();
+        api.Messages.AddRange(Enumerable.Range(1, 20).Select(index => Message(chatId, index)));
+        var viewModel = new ChatViewModel(chatId, api);
+        viewModel.SetCurrentUser(Guid.NewGuid());
+        await viewModel.LoadAsync();
+
+        await viewModel.MarkVisibleReadAsync(3);
+        await viewModel.MarkVisibleReadAsync(2);
+        await viewModel.MarkVisibleReadAsync(3);
+        Assert.Equal([3L], api.ReadSequences);
+        api.ReadFailure = new HttpRequestException("offline");
+        await Assert.ThrowsAsync<HttpRequestException>(() => viewModel.MarkVisibleReadAsync(8));
+        api.ReadFailure = null;
+        await viewModel.MarkVisibleReadAsync(8);
+        await viewModel.MarkVisibleReadAsync(long.MaxValue);
+        Assert.Equal([3L, 8L, 20L], api.ReadSequences);
+    }
+
+    [Fact]
+    public async Task Read_receipts_are_reconciled_on_reconnect_and_unsubscribed_when_chat_closes()
+    {
+        var chatId = Guid.NewGuid();
+        var peer = Guid.NewGuid();
+        var api = new FakeConversationApi();
+        api.Members.Add(new(peer, "member", DateTimeOffset.UtcNow, 1));
+        var realtime = new FakeRealtimeClient();
+        var sync = new ChatSyncService(api, realtime, new MemoryCursorStore());
+        var viewModel = new ChatViewModel(chatId, api);
+        viewModel.SetCurrentUser(Guid.NewGuid());
+        sync.ReadPositionsLoaded += members => { viewModel.ApplyReadPositions(members); return Task.CompletedTask; };
+        sync.ReadPositionChanged += receipt => { viewModel.ApplyReadPosition(receipt); return Task.CompletedTask; };
+
+        await sync.StartAsync(chatId);
+        Assert.Equal(1, viewModel.ReadSequence);
+        await realtime.EmitReadAsync(new(chatId, peer, 4));
+        Assert.Equal(4, viewModel.ReadSequence);
+        api.Members[0] = api.Members[0] with { LastReadSequence = 9 };
+        await realtime.ReconnectAsync();
+        Assert.Equal(9, viewModel.ReadSequence);
+        sync.Stop();
+        await realtime.EmitReadAsync(new(chatId, peer, 12));
+        Assert.Equal(9, viewModel.ReadSequence);
+    }
+
+    [Fact]
+    public async Task Delayed_reconciliation_from_a_closed_chat_does_not_leak_into_the_next_chat()
+    {
+        var previousChat = Guid.NewGuid();
+        var nextChat = Guid.NewGuid();
+        var api = new FakeConversationApi
+        {
+            FirstMessagesLookupStarted = new(TaskCreationOptions.RunContinuationsAsynchronously),
+            ReleaseFirstMessagesLookup = new(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        api.Messages.Add(Message(previousChat, 10));
+        api.Messages.Add(Message(nextChat, 1));
+        var realtime = new FakeRealtimeClient();
+        var sync = new ChatSyncService(api, realtime, new MemoryCursorStore());
+        var received = new List<Guid>();
+        sync.MessageReceived += message => { received.Add(message.ChatId); return Task.CompletedTask; };
+        var previousStart = sync.StartAsync(previousChat);
+        await api.FirstMessagesLookupStarted.Task;
+
+        sync.Stop();
+        var nextStart = sync.StartAsync(nextChat);
+        api.ReleaseFirstMessagesLookup.SetResult();
+        await Task.WhenAll(previousStart, nextStart);
+
+        Assert.Equal([nextChat], received);
+        Assert.Equal([previousChat, nextChat], realtime.JoinedChats);
+    }
+
     private static MessageResponse Message(Guid chatId, long sequence) => new(
         Guid.NewGuid(), chatId, Guid.NewGuid(), sequence, Guid.NewGuid(), "text", $"m{sequence}", false,
         DateTimeOffset.UtcNow, null, null);
@@ -367,8 +471,15 @@ public sealed class ChatSyncAndViewModelTests
     private sealed class FakeRealtimeClient : IChatRealtimeClient
     {
         public event Func<MessageCreatedEvent, Task>? MessageCreated;
+        public event Func<ReadPositionChangedEvent, Task>? ReadPositionChanged;
         public event Func<Task>? Reconnected;
         public event Action<ChatConnectionState>? ConnectionStateChanged;
+        public List<Guid> JoinedChats { get; } = [];
+        public Task JoinChatAsync(Guid chatId, CancellationToken cancellationToken = default)
+        {
+            JoinedChats.Add(chatId);
+            return Task.CompletedTask;
+        }
         public Task ConnectAsync(CancellationToken cancellationToken = default)
         {
             ConnectionStateChanged?.Invoke(ChatConnectionState.Connecting);
@@ -376,6 +487,7 @@ public sealed class ChatSyncAndViewModelTests
             return Task.CompletedTask;
         }
         public Task EmitAsync(MessageCreatedEvent value) => MessageCreated?.Invoke(value) ?? Task.CompletedTask;
+        public Task EmitReadAsync(ReadPositionChangedEvent value) => ReadPositionChanged?.Invoke(value) ?? Task.CompletedTask;
         public Task ReconnectAsync() => Reconnected?.Invoke() ?? Task.CompletedTask;
     }
 
@@ -403,6 +515,9 @@ public sealed class ChatSyncAndViewModelTests
     private sealed class FakeConversationApi : IConversationApi
     {
         public List<ChatResponse> ChatRows { get; } = [];
+        public List<ChatMemberResponse> Members { get; } = [];
+        public List<long> ReadSequences { get; } = [];
+        public Exception? ReadFailure { get; set; }
         public int FolderLookups { get; private set; }
         public List<MessageResponse> Messages { get; } = [];
         public List<MessageResponse> SearchResults { get; } = [];
@@ -417,6 +532,9 @@ public sealed class ChatSyncAndViewModelTests
         public int ChatListLookups { get; private set; }
         public TaskCompletionSource? FirstChatLookupStarted { get; init; }
         public TaskCompletionSource? ReleaseFirstChatLookup { get; init; }
+        public TaskCompletionSource? FirstMessagesLookupStarted { get; init; }
+        public TaskCompletionSource? ReleaseFirstMessagesLookup { get; init; }
+        private int _messagesLookups;
         public IReadOnlyList<ChatResponse>? SecondChatRows { get; init; }
         public UpdateContactRequest? LastContactUpdate { get; private set; }
 
@@ -442,16 +560,33 @@ public sealed class ChatSyncAndViewModelTests
             FolderLookups++;
             return Task.FromResult<IReadOnlyList<ChatFolderResponse>>([]);
         }
+        public Task<IReadOnlyList<ChatMemberResponse>> GetChatMembersAsync(Guid chatId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<ChatMemberResponse>>(Members.ToArray());
         public Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ContactResponse>>([]);
         public Task<ContactResponse?> GetContactByUserAsync(Guid userId, CancellationToken ct = default) => Task.FromResult<ContactResponse?>(null);
         public Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<UserSearchResponse>>([]);
         public Task<UserSearchResponse> GetVisibleUserAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
 
-        public Task<IReadOnlyList<MessageResponse>> GetMessagesAsync(Guid chatId, long afterSequence, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<MessageResponse>>(Messages.Where(message => message.ChatId == chatId && message.Sequence > afterSequence).OrderBy(message => message.Sequence).ToArray());
+        public async Task<IReadOnlyList<MessageResponse>> GetMessagesAsync(Guid chatId, long afterSequence, CancellationToken ct = default)
+        {
+            var messages = Messages.Where(message => message.ChatId == chatId && message.Sequence > afterSequence)
+                .OrderBy(message => message.Sequence).ToArray();
+            if (++_messagesLookups == 1 && ReleaseFirstMessagesLookup is not null)
+            {
+                FirstMessagesLookupStarted?.SetResult();
+                await ReleaseFirstMessagesLookup.Task.WaitAsync(ct);
+            }
+            return messages;
+        }
         public Task ReorderFoldersAsync(IReadOnlyList<Guid> folderIds, CancellationToken ct = default) => Task.CompletedTask;
         public Task SetArchivedAsync(Guid chatId, bool value, CancellationToken ct = default) { Archived.Add(chatId); return Task.CompletedTask; }
-        public Task MarkReadAsync(Guid chatId, long sequence, CancellationToken ct = default) { ReadChats.Add(chatId); return Task.CompletedTask; }
+        public Task MarkReadAsync(Guid chatId, long sequence, CancellationToken ct = default)
+        {
+            if (ReadFailure is not null) return Task.FromException(ReadFailure);
+            ReadChats.Add(chatId);
+            ReadSequences.Add(sequence);
+            return Task.CompletedTask;
+        }
         public Task DeleteChatAsync(Guid chatId, CancellationToken ct = default) => Task.CompletedTask;
         public Task<ChatResponse> CreateDirectAsync(Guid userId, CancellationToken ct = default) { DirectCreates++; return Task.FromResult(Chat(Guid.NewGuid())); }
         public Task<ChatResponse> CreateGroupAsync(string title, IReadOnlyList<Guid> userIds, CancellationToken ct = default) { GroupCreates++; return Task.FromResult(Chat(Guid.NewGuid())); }

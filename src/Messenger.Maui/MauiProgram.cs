@@ -62,6 +62,11 @@ public static class MauiProgram
 			(ChatRealtimeClient)services.GetRequiredService<IChatRealtimeClient>());
 		builder.Services.AddSingleton<IChatCursorStore, PreferencesChatCursorStore>();
 		builder.Services.AddSingleton<IMediaCaptureService, NativeMediaCaptureService>();
+#if ANDROID
+		builder.Services.AddSingleton<IGalleryService, Platforms.Android.DeviceGalleryService>();
+#elif IOS
+		builder.Services.AddSingleton<IGalleryService, Platforms.iOS.DeviceGalleryService>();
+#endif
 		builder.Services.AddSingleton<IMusicFilePicker, MusicFilePicker>();
 		builder.Services.AddSingleton(services => new UploadClient(
 			services.GetRequiredService<HttpClient>(), new HttpClient()));

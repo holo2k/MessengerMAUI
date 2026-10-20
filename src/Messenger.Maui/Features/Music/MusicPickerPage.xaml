@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:music="clr-namespace:Messenger.Maui.Features.Music" xmlns:contracts="clr-namespace:Messenger.Contracts.Music;assembly=Messenger.Contracts"
+             xmlns:ui="clr-namespace:Messenger.Maui.Controls" x:Class="Messenger.Maui.Features.Music.MusicPickerPage"
+             x:DataType="music:MusicPickerPage" BackgroundColor="{StaticResource White}" Title="Отправить песню" Shell.NavBarIsVisible="False">
+    <Grid RowDefinitions="Auto,Auto,*">
+        <Grid ColumnDefinitions="44,*,44" Padding="12,8" BackgroundColor="{StaticResource BarBackground}">
+            <Button Text="‹" Clicked="OnBackClicked" BackgroundColor="Transparent" TextColor="{StaticResource Primary}" FontSize="32" Padding="0" SemanticProperties.Description="Назад" />
+            <Label Grid.Column="1" Text="Отправить песню" FontSize="17" FontAttributes="Bold" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
+        </Grid>
+        <SearchBar x:Name="Search" Grid.Row="1" Placeholder="Трек или исполнитель" SearchButtonPressed="OnSearchPressed" TextChanged="OnSearchTextChanged" Margin="8,4" />
+        <CollectionView x:Name="TrackChoices" Grid.Row="2" ItemsSource="{Binding Tracks}" SelectionMode="Single" SelectionChanged="OnTrackSelected">
+            <CollectionView.EmptyView><Label Text="Найдите песню или добавьте её на странице музыки" HorizontalTextAlignment="Center" TextColor="{StaticResource TextSecondary}" Margin="24" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate><DataTemplate x:DataType="contracts:MusicTrackResponse">
+                <Grid ColumnDefinitions="48,*,Auto" ColumnSpacing="12" Padding="16,8">
+                    <ui:MusicArtworkView Track="{Binding .}" WidthRequest="48" HeightRequest="48" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                        <Label Text="{Binding Title}" FontSize="15" FontAttributes="Bold" LineBreakMode="TailTruncation" />
+                        <Label Text="{Binding Artist}" FontSize="13" TextColor="{StaticResource TextSecondary}" LineBreakMode="TailTruncation" />
+                    </VerticalStackLayout>
+                    <Label Grid.Column="2" Text="{Binding DurationMs, Converter={StaticResource DisplayValue}, ConverterParameter=duration}" FontSize="12" TextColor="{StaticResource TextSecondary}" VerticalTextAlignment="Center" />
+                </Grid>
+            </DataTemplate></CollectionView.ItemTemplate>
+        </CollectionView>
+        <Grid x:Name="SendingOverlay" Grid.RowSpan="3" BackgroundColor="#CCFFFFFF" IsVisible="False">
+            <ActivityIndicator IsRunning="True" Color="{StaticResource Primary}" HorizontalOptions="Center" VerticalOptions="Center" />
+        </Grid>
+    </Grid>
+</ContentPage>

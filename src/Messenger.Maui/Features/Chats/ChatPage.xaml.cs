@@ -6,6 +6,7 @@ using Messenger.Contracts.Realtime;
 using Messenger.Contracts.Music;
 using Messenger.Maui.Features.Music;
 using Microsoft.Extensions.DependencyInjection;
+using Messenger.Maui.Controls;
 
 namespace Messenger.Maui.Features.Chats;
 
@@ -57,7 +58,17 @@ public partial class ChatPage : ContentPage
         if (_isActive) return;
         _isActive = _windowActive = true;
         Music = (Shell.Current as AppShell)?.Music;
-        if (Music is not null) Music.TrackUpdated += _viewModel.ApplyMusicTrack;
+        if (Music is not null)
+        {
+            Music.TrackUpdated += _viewModel.ApplyMusicTrack;
+            if (MiniPlayerHost.Content is null)
+            {
+                var miniPlayer = new MiniPlayerView(Music, () => MusicPlayerPage.OpenAsync(Navigation, Music));
+                miniPlayer.SetCompact(true);
+                MiniPlayerHost.Content = miniPlayer;
+                MiniPlayerHost.SetBinding(IsVisibleProperty, new Binding(nameof(MusicViewModel.HasCurrentTrack), source: Music));
+            }
+        }
         OnPropertyChanged(nameof(Music));
         _window = Window;
         if (_window is not null)

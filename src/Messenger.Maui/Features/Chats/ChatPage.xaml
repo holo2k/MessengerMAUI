@@ -32,7 +32,8 @@
         <Grid Grid.Row="2" BackgroundColor="{StaticResource ChatBackground}">
             <Image Source="chat_wallpaper.png" Aspect="AspectFill" InputTransparent="True" />
             <Grid Padding="0,8">
-                <CollectionView x:Name="MessagesList" ItemsSource="{Binding Messages}" ItemsUpdatingScrollMode="KeepLastItemInView">
+                <CollectionView x:Name="MessagesList" ItemsSource="{Binding Messages}" ItemsUpdatingScrollMode="KeepLastItemInView"
+                                Scrolled="OnMessagesScrolled" Loaded="OnMessagesLoaded">
                     <CollectionView.EmptyView>
                         <Border BackgroundColor="#DDFFFFFF" StrokeShape="RoundRectangle 12" Padding="16,10" HorizontalOptions="Center" VerticalOptions="Center" Margin="24">
                             <Label x:Name="EmptyMessageLabel" Text="Начните общение" FontSize="14" TextColor="#52778A" HorizontalTextAlignment="Center" />
@@ -40,7 +41,8 @@
                     </CollectionView.EmptyView>
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="messages:MessageResponse">
-                            <ui:MessageBubble Message="{Binding .}" CurrentUserId="{Binding Source={x:Reference ChatScreen}, Path=CurrentUserId, x:DataType=chats:ChatPage}" />
+                            <ui:MessageBubble Message="{Binding .}" CurrentUserId="{Binding Source={x:Reference ChatScreen}, Path=CurrentUserId, x:DataType=chats:ChatPage}"
+                                              ReadSequence="{Binding Source={x:Reference ChatScreen}, Path=ReadSequence, x:DataType=chats:ChatPage}" />
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
                 </CollectionView>

@@ -17,12 +17,11 @@
                             BackgroundColor="#E8EDF2" TextColor="#273846" CornerRadius="20" Padding="16,8" VerticalOptions="Center" />
                 </Grid>
                 <VerticalStackLayout Padding="16,12" Spacing="14" BackgroundColor="{StaticResource White}">
-                    <Border BackgroundColor="White" Stroke="#E8EDF2" StrokeThickness="1" StrokeShape="RoundRectangle 16" Padding="12,2">
-                        <Grid ColumnDefinitions="24,*,36" ColumnSpacing="8">
-                            <Image Source="icon_search.png" WidthRequest="20" HeightRequest="20" VerticalOptions="Center" />
-                            <Entry Grid.Column="1" Text="{Binding SearchText}" Placeholder="Трек или исполнитель" ReturnType="Search" Completed="OnSearchClicked"
-                                   TextChanged="OnSearchTextChanged" FontSize="15" MinimumHeightRequest="44" />
-                            <ImageButton Grid.Column="2" Source="icon_search.png" Clicked="OnSearchClicked" WidthRequest="36" HeightRequest="36" SemanticProperties.Description="Найти музыку" />
+                    <Border Style="{StaticResource SearchField}" Stroke="#E8EDF2" StrokeThickness="1">
+                        <Grid ColumnDefinitions="*,36">
+                            <Entry Text="{Binding SearchText}" Placeholder="Трек или исполнитель" ReturnType="Search" Completed="OnSearchClicked"
+                                   TextChanged="OnSearchTextChanged" FontSize="15" MinimumHeightRequest="36" />
+                            <ImageButton Grid.Column="1" Source="icon_search.png" Clicked="OnSearchClicked" WidthRequest="36" HeightRequest="36" SemanticProperties.Description="Найти музыку" />
                         </Grid>
                     </Border>
                     <Grid ColumnDefinitions="*,Auto" VerticalOptions="Center">

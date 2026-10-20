@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:music="clr-namespace:Messenger.Maui.Features.Music" xmlns:chats="clr-namespace:Messenger.Maui.Features.Chats"
+             xmlns:ui="clr-namespace:Messenger.Maui.Controls" x:Class="Messenger.Maui.Features.Music.MusicSharePage"
+             x:DataType="music:MusicSharePage" BackgroundColor="{StaticResource White}" SafeAreaEdges="All" Shell.NavBarIsVisible="False">
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+        <Grid ColumnDefinitions="44,*,44" Padding="12,8" BackgroundColor="{StaticResource BarBackground}">
+            <Button Text="‹" Clicked="OnCloseClicked" BackgroundColor="Transparent" TextColor="{StaticResource Primary}" FontSize="32" Padding="0" SemanticProperties.Description="Назад" />
+            <Label Grid.Column="1" Text="Отправить песню" FontSize="17" FontAttributes="Bold" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
+        </Grid>
+        <Grid Grid.Row="1" ColumnDefinitions="56,*" ColumnSpacing="12" Padding="16,12">
+            <ui:MusicArtworkView Track="{Binding Track}" WidthRequest="56" HeightRequest="56" />
+            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                <Label Text="{Binding Track.Title}" FontSize="16" FontAttributes="Bold" LineBreakMode="TailTruncation" />
+                <Label Text="{Binding Track.Artist}" FontSize="14" TextColor="{StaticResource TextSecondary}" LineBreakMode="TailTruncation" />
+            </VerticalStackLayout>
+        </Grid>
+        <Label Grid.Row="2" Text="Выберите чат" FontSize="14" TextColor="{StaticResource TextSecondary}" Margin="16,4,16,8" />
+        <CollectionView x:Name="ChatChoices" Grid.Row="3" ItemsSource="{Binding Chats}" SelectionMode="Single" SelectionChanged="OnChatSelected">
+            <CollectionView.EmptyView><Label Text="Нет доступных чатов" HorizontalTextAlignment="Center" TextColor="{StaticResource TextSecondary}" Margin="24" /></CollectionView.EmptyView>
+            <CollectionView.ItemTemplate><DataTemplate x:DataType="chats:ChatListItem">
+                <Grid ColumnDefinitions="48,*" ColumnSpacing="12" Padding="16,10">
+                    <ui:AvatarView Person="{Binding Title}" AvatarObjectId="{Binding AvatarObjectId}" WidthRequest="48" HeightRequest="48" />
+                    <Label Grid.Column="1" Text="{Binding Title}" FontSize="16" FontAttributes="Bold" VerticalTextAlignment="Center" LineBreakMode="TailTruncation" />
+                </Grid>
+            </DataTemplate></CollectionView.ItemTemplate>
+        </CollectionView>
+        <Grid x:Name="SendingOverlay" Grid.RowSpan="4" BackgroundColor="#CCFFFFFF" IsVisible="False" InputTransparent="False">
+            <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
+                <ActivityIndicator IsRunning="True" Color="{StaticResource Primary}" />
+                <Label Text="Отправка…" />
+            </VerticalStackLayout>
+        </Grid>
+    </Grid>
+</ContentPage>

@@ -5,9 +5,11 @@
              xmlns:messages="clr-namespace:Messenger.Contracts.Messages;assembly=Messenger.Contracts"
              xmlns:ui="clr-namespace:Messenger.Maui.Controls"
              x:Class="Messenger.Maui.Features.Chats.ChatPage" x:Name="ChatScreen" x:DataType="chats:ChatViewModel"
-             Title="Чат" Shell.NavBarIsVisible="False" Shell.TabBarIsVisible="False">
-    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" BackgroundColor="{StaticResource ChatBackground}">
-        <Grid ColumnDefinitions="44,34,*,44,44" ColumnSpacing="4" Padding="0,2,4,2" BackgroundColor="{StaticResource BarBackground}" MinimumHeightRequest="48">
+             Title="Чат" Shell.NavBarIsVisible="False" Shell.TabBarIsVisible="False"
+             Padding="0" SafeAreaEdges="None" BackgroundColor="{StaticResource BarBackground}">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" BackgroundColor="{StaticResource BarBackground}" SafeAreaEdges="SoftInput">
+        <Grid x:Name="ChatHeader" ColumnDefinitions="44,34,*,44,44" ColumnSpacing="4" Margin="0" Padding="0,2,4,2"
+              SafeAreaEdges="Container,Container,Container,None" BackgroundColor="{StaticResource BarBackground}" MinimumHeightRequest="48">
             <ImageButton Source="icon_back.png" Clicked="OnBackClicked" SemanticProperties.Description="Назад к чатам" />
             <Grid Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="34,*" ColumnSpacing="4">
                 <Grid.GestureRecognizers>
@@ -27,20 +29,22 @@
             <Button Grid.Column="1" Text="Найти" Clicked="OnSearchClicked" FontSize="14" />
             <Button Grid.Column="2" Text="Сброс" Clicked="OnResetSearchClicked" FontSize="14" />
         </Grid>
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="2" BackgroundColor="{StaticResource ChatBackground}">
             <Image Source="chat_wallpaper.png" Aspect="AspectFill" InputTransparent="True" />
-            <CollectionView x:Name="MessagesList" ItemsSource="{Binding Messages}" ItemsUpdatingScrollMode="KeepLastItemInView" Margin="0,8">
-                <CollectionView.EmptyView>
-                    <Border BackgroundColor="#DDFFFFFF" StrokeShape="RoundRectangle 12" Padding="16,10" HorizontalOptions="Center" VerticalOptions="Center" Margin="24">
-                        <Label x:Name="EmptyMessageLabel" Text="Начните общение" FontSize="14" TextColor="#52778A" HorizontalTextAlignment="Center" />
-                    </Border>
-                </CollectionView.EmptyView>
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="messages:MessageResponse">
-                        <ui:MessageBubble Message="{Binding .}" CurrentUserId="{Binding Source={x:Reference ChatScreen}, Path=CurrentUserId, x:DataType=chats:ChatPage}" />
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
+            <Grid Padding="0,8">
+                <CollectionView x:Name="MessagesList" ItemsSource="{Binding Messages}" ItemsUpdatingScrollMode="KeepLastItemInView">
+                    <CollectionView.EmptyView>
+                        <Border BackgroundColor="#DDFFFFFF" StrokeShape="RoundRectangle 12" Padding="16,10" HorizontalOptions="Center" VerticalOptions="Center" Margin="24">
+                            <Label x:Name="EmptyMessageLabel" Text="Начните общение" FontSize="14" TextColor="#52778A" HorizontalTextAlignment="Center" />
+                        </Border>
+                    </CollectionView.EmptyView>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="messages:MessageResponse">
+                            <ui:MessageBubble Message="{Binding .}" CurrentUserId="{Binding Source={x:Reference ChatScreen}, Path=CurrentUserId, x:DataType=chats:ChatPage}" />
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
         </Grid>
         <CollectionView Grid.Row="3" ItemsSource="{Binding Media.Attachments}" HeightRequest="60" BackgroundColor="{StaticResource BarBackground}"
                         IsVisible="{Binding Media.Attachments.Count, Converter={StaticResource DisplayValue}, ConverterParameter=positive}">
@@ -56,7 +60,8 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
-        <Grid Grid.Row="4" ColumnDefinitions="44,*,44,44" BackgroundColor="{StaticResource BarBackground}" Padding="0,4,4,4" ColumnSpacing="2">
+        <Grid x:Name="MessageComposer" Grid.Row="4" ColumnDefinitions="44,*,44,44" BackgroundColor="{StaticResource BarBackground}"
+              Margin="0" Padding="0,4,4,4" SafeAreaEdges="Container,None,Container,Container" ColumnSpacing="2">
             <ImageButton Source="icon_plus.png" Clicked="OnAttachClicked" SemanticProperties.Description="Прикрепить вложение" />
             <Border Grid.Column="1" Stroke="{StaticResource Separator}" StrokeThickness="1" StrokeShape="RoundRectangle 18" BackgroundColor="White" Padding="12,0">
                 <Entry x:Name="ComposerEntry" Text="{Binding ComposerText}" Placeholder="Сообщение" MinimumHeightRequest="36" TextChanged="OnComposerChanged" />

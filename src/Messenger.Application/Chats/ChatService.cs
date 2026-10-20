@@ -236,15 +236,15 @@ public sealed class ChatService(IChatStore store, IClock clock, IChatSummaryRead
         await store.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task MarkReadAsync(Guid requesterUserId, Guid chatId, long sequence, CancellationToken cancellationToken = default)
+    public async Task<long> MarkReadAsync(Guid requesterUserId, Guid chatId, long sequence, CancellationToken cancellationToken = default)
     {
-        var member = (await GetAsync(requesterUserId, chatId, cancellationToken)).Member;
+        var view = await GetAsync(requesterUserId, chatId, cancellationToken);
         if (sequence < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(sequence));
         }
-        member.MarkRead(sequence);
-        await store.SaveChangesAsync(cancellationToken);
+        return await store.AdvanceReadPositionAsync(chatId, requesterUserId,
+            Math.Min(sequence, view.Chat.CurrentMessageSequence), cancellationToken);
     }
 
     private static string EncodeCursor(Chat chat) => Convert.ToBase64String(

@@ -62,6 +62,16 @@ public sealed class EfSocialStore(MessengerDbContext dbContext) : IContactStore,
     public async Task<IReadOnlyList<ChatMember>> ListMembersAsync(Guid chatId, CancellationToken cancellationToken) =>
         await dbContext.ChatMembers.Where(member => member.ChatId == chatId).ToListAsync(cancellationToken);
 
+    public async Task<long> AdvanceReadPositionAsync(Guid chatId, Guid userId, long sequence, CancellationToken cancellationToken)
+    {
+        // Advance in the database so a delayed request from another device cannot move the cursor backwards.
+        var membership = dbContext.ChatMembers.Where(member =>
+            member.ChatId == chatId && member.UserId == userId && member.LeftAt == null);
+        await membership.ExecuteUpdateAsync(setters => setters.SetProperty(member => member.LastReadSequence,
+            member => member.LastReadSequence < sequence ? sequence : member.LastReadSequence), cancellationToken);
+        return await membership.Select(member => member.LastReadSequence).SingleAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Guid>> ListActiveChatIdsAsync(Guid userId, CancellationToken cancellationToken) =>
         await dbContext.ChatMembers.Where(member => member.UserId == userId && member.LeftAt == null)
             .Join(dbContext.Chats.Where(chat => chat.DeletedAt == null), member => member.ChatId, chat => chat.Id, (_, chat) => chat.Id)

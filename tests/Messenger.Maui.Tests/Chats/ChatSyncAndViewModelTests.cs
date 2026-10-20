@@ -64,7 +64,6 @@ public sealed class ChatSyncAndViewModelTests
         viewModel.SetCurrentUser(currentUserId);
         viewModel.Chats.Add(new ChatListItem(first, 0, currentUserId));
         viewModel.Chats.Add(new ChatListItem(target, 0, currentUserId));
-        viewModel.SelectFolder(null);
         var incomingMessageId = Guid.NewGuid();
         var incoming = target with
         {
@@ -91,19 +90,16 @@ public sealed class ChatSyncAndViewModelTests
     }
 
     [Fact]
-    public void Chat_upsert_preserves_selected_folder_filter()
+    public void Chat_upsert_keeps_all_active_chats_visible()
     {
-        var included = Chat(Guid.NewGuid());
-        var excluded = Chat(Guid.NewGuid());
-        var folder = new ChatFolderResponse(Guid.NewGuid(), "Работа", 0, [included.Id]);
+        var first = Chat(Guid.NewGuid()) with { UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-1) };
+        var second = Chat(Guid.NewGuid());
         var viewModel = new ChatsViewModel(new FakeConversationApi());
-        viewModel.Folders.Add(folder);
-        viewModel.SelectFolder(folder.Id);
 
-        viewModel.Upsert(excluded, incrementUnread: false);
-        viewModel.Upsert(included, incrementUnread: false);
+        viewModel.Upsert(first, incrementUnread: false);
+        viewModel.Upsert(second, incrementUnread: false);
 
-        Assert.Equal([included.Id], viewModel.VisibleChats.Select(item => item.Chat.Id));
+        Assert.Equal([second.Id, first.Id], viewModel.VisibleChats.Select(item => item.Chat.Id));
     }
 
     [Fact]
@@ -157,22 +153,16 @@ public sealed class ChatSyncAndViewModelTests
     }
 
     [Fact]
-    public async Task Chat_list_reorders_folders_runs_bulk_actions_and_creates_direct_or_group()
+    public async Task Chat_list_runs_bulk_actions_and_creates_direct_or_group()
     {
         var api = new FakeConversationApi();
-        var firstFolder = new ChatFolderResponse(Guid.NewGuid(), "Первый", 0, []);
-        var secondFolder = new ChatFolderResponse(Guid.NewGuid(), "Второй", 1, []);
         var viewModel = new ChatsViewModel(api);
-        viewModel.Folders.Add(firstFolder);
-        viewModel.Folders.Add(secondFolder);
         var chatIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
 
-        await viewModel.MoveFolderAsync(1, 0);
         await viewModel.ApplyBulkAsync(chatIds, ChatBulkAction.Archive);
         await viewModel.CreateChatAsync([Guid.NewGuid()], null);
         await viewModel.CreateChatAsync([Guid.NewGuid(), Guid.NewGuid()], "Команда");
 
-        Assert.Equal([secondFolder.Id, firstFolder.Id], viewModel.Folders.Select(folder => folder.Id));
         Assert.Equal(2, api.Archived.Count);
         Assert.Equal(1, api.DirectCreates);
         Assert.Equal(1, api.GroupCreates);
@@ -290,7 +280,7 @@ public sealed class ChatSyncAndViewModelTests
     }
 
     [Fact]
-    public async Task Folder_selection_excludes_archived_and_hidden_chats_and_restores_all_active_chats()
+    public async Task Chat_list_loads_all_active_chats_without_requesting_folders()
     {
         var api = new FakeConversationApi();
         var first = Chat(Guid.NewGuid()) with { UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-1) };
@@ -298,16 +288,17 @@ public sealed class ChatSyncAndViewModelTests
         var archived = Chat(Guid.NewGuid()) with { IsArchived = true };
         var hidden = Chat(Guid.NewGuid()) with { IsHidden = true };
         api.ChatRows.AddRange([first, second, archived, hidden]);
-        var folder = new ChatFolderResponse(Guid.NewGuid(), "Работа", 0, [first.Id, archived.Id, hidden.Id]);
-        api.FolderRows.Add(folder);
         var viewModel = new ChatsViewModel(api);
 
         await viewModel.LoadAsync();
         Assert.Equal([second.Id, first.Id], viewModel.VisibleChats.Select(item => item.Chat.Id));
-        viewModel.SelectFolder(folder.Id);
-        Assert.Equal(first.Id, Assert.Single(viewModel.VisibleChats).Chat.Id);
-        viewModel.SelectFolder(null);
-        Assert.Equal(2, viewModel.VisibleChats.Count);
+        Assert.Equal(0, api.FolderLookups);
+
+        viewModel.Upsert(first with { IsArchived = true }, incrementUnread: false);
+        Assert.Equal(second.Id, Assert.Single(viewModel.VisibleChats).Chat.Id);
+
+        viewModel.Upsert(second with { IsHidden = true }, incrementUnread: false);
+        Assert.Empty(viewModel.VisibleChats);
     }
 
     [Fact]
@@ -412,7 +403,7 @@ public sealed class ChatSyncAndViewModelTests
     private sealed class FakeConversationApi : IConversationApi
     {
         public List<ChatResponse> ChatRows { get; } = [];
-        public List<ChatFolderResponse> FolderRows { get; } = [];
+        public int FolderLookups { get; private set; }
         public List<MessageResponse> Messages { get; } = [];
         public List<MessageResponse> SearchResults { get; } = [];
         public List<MessageResponse> PinResults { get; } = [];
@@ -446,7 +437,11 @@ public sealed class ChatSyncAndViewModelTests
                 ? Task.FromResult(ChatRows.Single(chat => chat.Id == chatId))
                 : Task.FromException<ChatResponse>(ChatLookupFailure);
         }
-        public Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatFolderResponse>>(FolderRows);
+        public Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default)
+        {
+            FolderLookups++;
+            return Task.FromResult<IReadOnlyList<ChatFolderResponse>>([]);
+        }
         public Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ContactResponse>>([]);
         public Task<ContactResponse?> GetContactByUserAsync(Guid userId, CancellationToken ct = default) => Task.FromResult<ContactResponse?>(null);
         public Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<UserSearchResponse>>([]);

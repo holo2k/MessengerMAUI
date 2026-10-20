@@ -19,6 +19,7 @@ public interface IChatStore
     Task AddDirectAsync(Chat chat, DirectChatPair pair, IReadOnlyCollection<ChatMember> members, CancellationToken cancellationToken);
     Task AddGroupAsync(Chat chat, IReadOnlyCollection<ChatMember> members, CancellationToken cancellationToken);
     Task AddMemberAsync(ChatMember member, CancellationToken cancellationToken);
+    Task<long> AdvanceReadPositionAsync(Guid chatId, Guid userId, long sequence, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
 
@@ -50,5 +51,5 @@ public interface IChatService
     Task RemoveMemberAsync(Guid requesterUserId, Guid chatId, Guid userId, CancellationToken cancellationToken = default);
     Task SetArchivedAsync(Guid requesterUserId, Guid chatId, bool value, CancellationToken cancellationToken = default);
     Task SetMutedAsync(Guid requesterUserId, Guid chatId, bool value, CancellationToken cancellationToken = default);
-    Task MarkReadAsync(Guid requesterUserId, Guid chatId, long sequence, CancellationToken cancellationToken = default);
+    Task<long> MarkReadAsync(Guid requesterUserId, Guid chatId, long sequence, CancellationToken cancellationToken = default);
 }

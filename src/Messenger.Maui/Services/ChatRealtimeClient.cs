@@ -19,6 +19,8 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IMusicRealtimeClie
             .Build();
         _connection.On<MessageCreatedEvent>("MessageCreated", message =>
             MessageCreated?.Invoke(message) ?? Task.CompletedTask);
+        _connection.On<ReadPositionChangedEvent>("ReadPositionChanged", message =>
+            ReadPositionChanged?.Invoke(message) ?? Task.CompletedTask);
         _connection.On<MusicTrackStatusChangedEvent>("MusicTrackStatusChanged", message =>
             TrackStatusChanged?.Invoke(message) ?? Task.CompletedTask);
         _connection.Reconnecting += _ =>
@@ -43,6 +45,7 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IMusicRealtimeClie
     }
 
     public event Func<MessageCreatedEvent, Task>? MessageCreated;
+    public event Func<ReadPositionChangedEvent, Task>? ReadPositionChanged;
     public event Func<Task>? Reconnected;
     public event Action<ChatConnectionState>? ConnectionStateChanged;
     public event Func<MusicTrackStatusChangedEvent, Task>? TrackStatusChanged;
@@ -66,6 +69,9 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IMusicRealtimeClie
             throw;
         }
     }
+
+    public Task JoinChatAsync(Guid chatId, CancellationToken cancellationToken = default) =>
+        _connection.InvokeAsync("JoinChat", chatId, cancellationToken);
 
     public ValueTask DisposeAsync() => _connection.DisposeAsync();
 }

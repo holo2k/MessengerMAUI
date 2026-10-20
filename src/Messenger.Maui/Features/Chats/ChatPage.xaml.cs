@@ -1,5 +1,8 @@
 using Messenger.Contracts.Chats;
 using Messenger.Maui.Services;
+using System.ComponentModel;
+using Messenger.Contracts.Messages;
+using Messenger.Contracts.Realtime;
 
 namespace Messenger.Maui.Features.Chats;
 
@@ -9,9 +12,12 @@ public partial class ChatPage : ContentPage
     private readonly ChatSyncService _sync;
     private readonly ChatResponse _chat;
     private readonly Func<Guid, Task>? _openProfile;
-    private bool _started;
+    private bool _isActive, _windowActive;
+    private int _lastVisibleIndex = -1;
+    private Window? _window;
 
     public Guid CurrentUserId { get; }
+    public long ReadSequence => _viewModel?.ReadSequence ?? 0;
 
     public ChatPage(
         ChatViewModel viewModel,
@@ -23,6 +29,11 @@ public partial class ChatPage : ContentPage
         CurrentUserId = currentUserId;
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
+        _viewModel.SetCurrentUser(currentUserId);
+        MessagesList.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ItemsView.ItemsSource)) _lastVisibleIndex = -1;
+        };
         _sync = sync;
         _chat = chat;
         _openProfile = openProfile;
@@ -39,28 +50,86 @@ public partial class ChatPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        if (_isActive) return;
+        _isActive = _windowActive = true;
+        _window = Window;
+        if (_window is not null)
+        {
+            _window.Activated += OnWindowActivated;
+            _window.Deactivated += OnWindowDeactivated;
+            _window.Stopped += OnWindowDeactivated;
+        }
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         _sync.MessageReceived += OnMessageReceivedAsync;
+        _sync.ReadPositionChanged += OnReadPositionChangedAsync;
+        _sync.ReadPositionsLoaded += OnReadPositionsLoadedAsync;
         _sync.ConnectionStateChanged += OnConnectionStateChanged;
         await RunAsync(_viewModel.LoadAsync);
-        if (!_started)
-        {
-            _started = true;
-            await RunAsync(ct => _sync.StartAsync(_viewModel.ChatId, ct));
-        }
+        if (!_isActive) return;
+        await RunAsync(ct => _sync.StartAsync(_viewModel.ChatId, ct));
+        if (!_isActive) { _sync.Stop(); return; }
         UpdateComposer();
+        Dispatcher.Dispatch(ScrollToLatestMessage);
     }
 
     protected override void OnDisappearing()
     {
+        _isActive = _windowActive = false;
+        _lastVisibleIndex = -1;
+        if (_window is not null)
+        {
+            _window.Activated -= OnWindowActivated;
+            _window.Deactivated -= OnWindowDeactivated;
+            _window.Stopped -= OnWindowDeactivated;
+            _window = null;
+        }
+        _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         _sync.Stop();
         _sync.MessageReceived -= OnMessageReceivedAsync;
+        _sync.ReadPositionChanged -= OnReadPositionChangedAsync;
+        _sync.ReadPositionsLoaded -= OnReadPositionsLoadedAsync;
         _sync.ConnectionStateChanged -= OnConnectionStateChanged;
-        _started = false;
         base.OnDisappearing();
     }
 
     private Task OnMessageReceivedAsync(Messenger.Contracts.Messages.MessageResponse message) =>
         MainThread.InvokeOnMainThreadAsync(() => _viewModel.Receive(message));
+    private Task OnReadPositionChangedAsync(ReadPositionChangedEvent position) =>
+        MainThread.InvokeOnMainThreadAsync(() => _viewModel.ApplyReadPosition(position));
+    private Task OnReadPositionsLoadedAsync(IReadOnlyList<ChatMemberResponse> members) =>
+        MainThread.InvokeOnMainThreadAsync(async () =>
+        {
+            _viewModel.ApplyReadPositions(members);
+            await MarkVisibleMessagesReadAsync();
+        });
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ChatViewModel.ReadSequence)) OnPropertyChanged(nameof(ReadSequence));
+    }
+    private async void OnWindowActivated(object? sender, EventArgs e)
+    {
+        _windowActive = true;
+        await MarkVisibleMessagesReadAsync();
+    }
+    private void OnWindowDeactivated(object? sender, EventArgs e) => _windowActive = false;
+    private void OnMessagesLoaded(object? sender, EventArgs e) => Dispatcher.Dispatch(ScrollToLatestMessage);
+    private void ScrollToLatestMessage()
+    {
+        if (_isActive && _viewModel.Messages.LastOrDefault() is { } last)
+            MessagesList.ScrollTo(last, position: ScrollToPosition.End, animate: false);
+    }
+    private async void OnMessagesScrolled(object? sender, ItemsViewScrolledEventArgs e)
+    {
+        _lastVisibleIndex = e.LastVisibleItemIndex;
+        await MarkVisibleMessagesReadAsync();
+    }
+    private async Task MarkVisibleMessagesReadAsync()
+    {
+        if (!_isActive || !_windowActive || _lastVisibleIndex < 0 ||
+            MessagesList.ItemsSource is not IList<MessageResponse> messages || _lastVisibleIndex >= messages.Count) return;
+        try { await _viewModel.MarkVisibleReadAsync(messages[_lastVisibleIndex].Sequence); }
+        catch (Exception exception) { System.Diagnostics.Debug.WriteLine($"Read receipt: {exception.Message}"); }
+    }
     private void OnConnectionStateChanged(ChatConnectionState state) =>
         MainThread.BeginInvokeOnMainThread(() => _viewModel.SetConnectionState(state));
 

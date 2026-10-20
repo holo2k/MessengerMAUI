@@ -2,6 +2,8 @@ using System.Text.RegularExpressions;
 using Messenger.Application.Security;
 using Messenger.Domain.Chats;
 using Messenger.Domain.Common;
+using Messenger.Application.Music;
+using Messenger.Domain.Music;
 
 namespace Messenger.Application.Chats;
 
@@ -10,25 +12,45 @@ public sealed partial class MessageService(
     IChatStore chatStore,
     IFieldCipher cipher,
     IBlindIndex blindIndex,
-    IClock clock) : IMessageService, IMessageSearchService
+    IClock clock,
+    IMusicStore music) : IMessageService, IMessageSearchService
 {
-    public async Task<MessageView> SendAsync(
+    public Task<MessageView> SendMusicAsync(Guid senderUserId, Guid chatId, Guid clientMessageId, Guid trackId,
+        CancellationToken cancellationToken = default) =>
+        SendCoreAsync(senderUserId, chatId, clientMessageId, MessageKind.Music, null, trackId, cancellationToken);
+
+    public Task<MessageView> SendAsync(
         Guid senderUserId,
         Guid chatId,
         Guid clientMessageId,
         MessageKind kind,
         string? body,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        SendCoreAsync(senderUserId, chatId, clientMessageId, kind, body, null, cancellationToken);
+
+    private async Task<MessageView> SendCoreAsync(Guid senderUserId, Guid chatId, Guid clientMessageId,
+        MessageKind kind, string? body, Guid? trackId, CancellationToken cancellationToken)
     {
         await RequireMemberAsync(chatId, senderUserId, cancellationToken);
         var existing = await messageStore.FindByClientIdAsync(senderUserId, clientMessageId, cancellationToken);
         if (existing is not null)
         {
+            if (existing.ChatId != chatId) throw new MessageRuleException(MessageRuleError.InvalidBody);
             return await ToViewAsync(existing, cancellationToken);
         }
         if (kind == MessageKind.Text && string.IsNullOrWhiteSpace(body))
         {
             throw new MessageRuleException(MessageRuleError.InvalidBody);
+        }
+
+        MusicTrack? track = null;
+        if (kind == MessageKind.Music)
+        {
+            if (trackId is null) throw new MessageRuleException(MessageRuleError.InvalidBody);
+            track = await music.FindTrackAsync(trackId.Value, cancellationToken);
+            if (track is null || track.Status != MusicTrackStatus.Available)
+                throw new MessageRuleException(MessageRuleError.NotFound);
+            body = $"{track.Title} — {track.Artist}";
         }
 
         var chat = await chatStore.FindChatAsync(chatId, cancellationToken)
@@ -38,6 +60,7 @@ public sealed partial class MessageService(
         var message = new Message(
             Guid.NewGuid(), chatId, senderUserId, chat.NextMessageSequence(clock.UtcNow), clientMessageId,
             kind, encrypted.Ciphertext, encrypted.Nonce, encrypted.Tag, encrypted.KeyVersion, clock.UtcNow);
+        if (track is not null) message.AttachMusic(track.Id);
         await messageStore.AddMessageAsync(message, SearchTokens(message.Id, normalizedBody), cancellationToken);
         if (chat.Type == ChatType.Direct)
         {
@@ -50,7 +73,7 @@ public sealed partial class MessageService(
             }
         }
         await chatStore.SaveChangesAsync(cancellationToken);
-        return new MessageView(message, normalizedBody, false);
+        return new MessageView(message, normalizedBody, false, track);
     }
 
     public async Task<IReadOnlyList<MessageView>> ListAsync(
@@ -77,6 +100,7 @@ public sealed partial class MessageService(
             throw new MessageRuleException(MessageRuleError.InvalidBody);
         }
         var message = await RequireMessageForMemberAsync(requesterUserId, messageId, cancellationToken);
+        if (message.Kind == MessageKind.Music) throw new MessageRuleException(MessageRuleError.InvalidBody);
         var encrypted = cipher.Encrypt(body);
         message.Edit(requesterUserId, encrypted.Ciphertext, encrypted.Nonce, encrypted.Tag, encrypted.KeyVersion, clock.UtcNow);
         await messageStore.ReplaceSearchTokensAsync(message.Id, SearchTokens(message.Id, body), cancellationToken);
@@ -214,7 +238,9 @@ public sealed partial class MessageService(
             ? cipher.Decrypt(new EncryptedValue(
                 message.BodyCiphertext, message.BodyNonce, message.BodyTag, message.BodyKeyVersion))
             : null;
-        return new MessageView(message, body, pinned);
+        var track = message.DeletedAt is null && message.MusicTrackId is { } trackId
+            ? await music.FindTrackAsync(trackId, cancellationToken) : null;
+        return new MessageView(message, body, pinned, track?.Status == MusicTrackStatus.Available ? track : null);
     }
 
     private async Task<IReadOnlyList<MessageView>> ToViewsAsync(

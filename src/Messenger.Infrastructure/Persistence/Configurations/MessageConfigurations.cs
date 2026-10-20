@@ -1,5 +1,6 @@
 using Messenger.Domain.Chats;
 using Messenger.Domain.Identity;
+using Messenger.Domain.Music;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -24,6 +25,8 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(message => message.EditedAt).HasColumnName("edited_at");
         builder.Property(message => message.DeletedAt).HasColumnName("deleted_at");
         builder.Property(message => message.DeletedByUserId).HasColumnName("deleted_by_user_id");
+        builder.Property(message => message.MusicTrackId).HasColumnName("music_track_id");
+        builder.HasOne<MusicTrack>().WithMany().HasForeignKey(message => message.MusicTrackId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(message => new { message.SenderUserId, message.ClientMessageId }).IsUnique();
         builder.HasIndex(message => new { message.ChatId, message.Sequence }).IsUnique();
         builder.HasOne<Chat>().WithMany().HasForeignKey(message => message.ChatId).OnDelete(DeleteBehavior.Cascade);

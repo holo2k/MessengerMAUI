@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:chats="clr-namespace:Messenger.Maui.Features.Chats" xmlns:ui="clr-namespace:Messenger.Maui.Controls"
+             x:Class="Messenger.Maui.Features.Chats.AttachmentPickerView" x:Name="PickerSurface" x:DataType="chats:AttachmentPickerViewModel"
+             BackgroundColor="{StaticResource White}">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="0">
+        <Grid RowDefinitions="Auto,Auto" BackgroundColor="{StaticResource BarBackground}" Padding="8,8,8,6">
+            <Grid.GestureRecognizers><SwipeGestureRecognizer Direction="Down" Swiped="OnSheetSwipedDown" /></Grid.GestureRecognizers>
+            <Border BackgroundColor="#C5C8CE" StrokeShape="RoundRectangle 2" WidthRequest="36" HeightRequest="4" HorizontalOptions="Center" Margin="0,0,0,8" />
+            <Grid Grid.Row="1" ColumnDefinitions="44,*,Auto">
+                <Button Text="✕" Clicked="OnCloseClicked" FontSize="20" Padding="0" TextColor="{StaticResource Black}" SemanticProperties.Description="Закрыть вложения" />
+                <VerticalStackLayout Grid.Column="1" Spacing="0" VerticalOptions="Center">
+                    <Label Text="Недавние" FontSize="17" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                    <Button Text="Выбрать другие фото" FontSize="11" Padding="0" MinimumHeightRequest="24" IsVisible="{Binding HasLimitedAccess}" Clicked="OnGalleryClicked" />
+                </VerticalStackLayout>
+                <Button Grid.Column="2" Text="{Binding AttachText}" FontSize="13" FontAttributes="Bold" Padding="10,4" IsEnabled="{Binding CanAttach}" Clicked="OnAttachClicked" />
+            </Grid>
+        </Grid>
+        <Label Grid.Row="1" Text="{Binding Status}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="12,6"
+               IsVisible="{Binding Status, Converter={StaticResource DisplayValue}, ConverterParameter=notEmpty}" />
+        <Grid Grid.Row="2">
+            <CollectionView x:Name="GalleryList" ItemsSource="{Binding Items}" SelectionMode="None" RemainingItemsThreshold="12" RemainingItemsThresholdReached="OnLoadMore" ItemSizingStrategy="MeasureFirstItem">
+                <CollectionView.ItemsLayout><GridItemsLayout Orientation="Vertical" Span="3" HorizontalItemSpacing="2" VerticalItemSpacing="2" /></CollectionView.ItemsLayout>
+                <CollectionView.ItemTemplate><DataTemplate x:DataType="chats:GalleryTile">
+                    <Grid HeightRequest="{Binding Source={x:Reference PickerSurface}, Path=TileSize, x:DataType=chats:AttachmentPickerView}">
+                        <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnTileTapped" CommandParameter="{Binding .}" /></Grid.GestureRecognizers>
+                        <ui:GalleryThumbnailView Item="{Binding Item}" />
+                        <BoxView Color="#330088FF" IsVisible="{Binding IsSelected}" InputTransparent="True" />
+                        <Border WidthRequest="25" HeightRequest="25" Margin="0,7,7,0" HorizontalOptions="End" VerticalOptions="Start"
+                                BackgroundColor="#33000000" Stroke="White" StrokeThickness="2" StrokeShape="RoundRectangle 13" InputTransparent="True">
+                            <Border.Triggers><DataTrigger TargetType="Border" Binding="{Binding IsSelected}" Value="True"><Setter Property="BackgroundColor" Value="{StaticResource Primary}" /></DataTrigger></Border.Triggers>
+                            <Label Text="{Binding SelectionNumber}" IsVisible="{Binding IsSelected}" TextColor="White" FontSize="12" FontAttributes="Bold" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
+                        </Border>
+                        <Border BackgroundColor="#99000000" StrokeThickness="0" StrokeShape="RoundRectangle 4" Padding="5,2" Margin="6" HorizontalOptions="Start" VerticalOptions="End" IsVisible="{Binding IsVideo}" InputTransparent="True">
+                            <Label Text="{Binding Duration, StringFormat='▶ {0}'}" TextColor="White" FontSize="11" />
+                        </Border>
+                    </Grid>
+                </DataTemplate></CollectionView.ItemTemplate>
+            </CollectionView>
+            <VerticalStackLayout IsVisible="{Binding ShowEmpty}" VerticalOptions="Center" HorizontalOptions="Center" Padding="28" Spacing="12">
+                <Label Text="Фото и видео из галереи" FontSize="16" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+                <Label Text="Здесь появятся фото и видео с вашего устройства." FontSize="13" TextColor="{StaticResource TextSecondary}" HorizontalTextAlignment="Center">
+                    <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding NeedsPermission}" Value="True"><Setter Property="Text" Value="Разрешите доступ к снимкам или прикрепите файл с устройства." /></DataTrigger></Label.Triggers>
+                </Label>
+                <Button Text="Разрешить доступ" IsVisible="{Binding NeedsPermission}" Clicked="OnPermissionClicked" />
+            </VerticalStackLayout>
+            <ActivityIndicator IsVisible="{Binding IsLoading}" IsRunning="{Binding IsLoading}" Color="{StaticResource Primary}" HorizontalOptions="Center" VerticalOptions="Center" />
+        </Grid>
+        <Grid Grid.Row="3" ColumnDefinitions="*,*,*" BackgroundColor="{StaticResource BarBackground}" Padding="8,6">
+            <VerticalStackLayout Spacing="0">
+                <VerticalStackLayout.GestureRecognizers><TapGestureRecognizer Tapped="OnGalleryTapped" /></VerticalStackLayout.GestureRecognizers>
+                <Image Source="attachment_gallery.png" WidthRequest="26" HeightRequest="26" Margin="0,6" InputTransparent="True" />
+                <Label Text="Галерея" FontSize="12" TextColor="{StaticResource Primary}" HorizontalTextAlignment="Center" InputTransparent="True" />
+            </VerticalStackLayout>
+            <VerticalStackLayout Grid.Column="1" Spacing="0">
+                <VerticalStackLayout.GestureRecognizers><TapGestureRecognizer Tapped="OnFileTapped" /></VerticalStackLayout.GestureRecognizers>
+                <Image Source="icon_file.png" WidthRequest="26" HeightRequest="26" Margin="0,6" InputTransparent="True" />
+                <Label Text="Файл" FontSize="12" HorizontalTextAlignment="Center" InputTransparent="True" />
+            </VerticalStackLayout>
+            <VerticalStackLayout Grid.Column="2" Spacing="0">
+                <VerticalStackLayout.GestureRecognizers><TapGestureRecognizer Tapped="OnMusicTapped" /></VerticalStackLayout.GestureRecognizers>
+                <Image Source="icon_music.png" WidthRequest="26" HeightRequest="26" Margin="0,6" InputTransparent="True" />
+                <Label Text="Музыка" FontSize="12" HorizontalTextAlignment="Center" InputTransparent="True" />
+            </VerticalStackLayout>
+        </Grid>
+        <Grid Grid.RowSpan="4" BackgroundColor="#BBFFFFFF" IsVisible="{Binding IsPreparing}"><ActivityIndicator IsRunning="{Binding IsPreparing}" HorizontalOptions="Center" VerticalOptions="Center" /></Grid>
+    </Grid>
+</ContentView>

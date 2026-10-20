@@ -3,6 +3,8 @@ using Messenger.Application.Chats;
 using Messenger.Contracts.Chats;
 using Messenger.Domain.Chats;
 using Messenger.Application.Media;
+using Messenger.Api.Hubs;
+using Messenger.Contracts.Realtime;
 
 namespace Messenger.Api.Endpoints;
 
@@ -81,8 +83,8 @@ public static class ChatEndpoints
             ClaimsPrincipal principal,
             IChatService service,
             CancellationToken ct) => Results.Ok((await service.ListMembersAsync(UserId(principal), chatId, ct))
-                .Select(member => new ChatMemberResponse(member.UserId, Role(member.Role), member.JoinedAt))))
-            .Document("ListChatMembers", "Получить участников", "Возвращает участников группового чата и их роли.", "Участники чата");
+                .Select(member => new ChatMemberResponse(member.UserId, Role(member.Role), member.JoinedAt, member.LastReadSequence))))
+            .Document("ListChatMembers", "Получить участников", "Возвращает активных участников чата, их роли и последние прочитанные последовательности сообщений.", "Участники чата");
         chats.MapPost("/{chatId:guid}/members", async (
             Guid chatId,
             AddChatMemberRequest request,
@@ -127,11 +129,14 @@ public static class ChatEndpoints
             return Results.NoContent();
         }).Document("SetChatMuted", "Заглушить чат", "Включает или отключает заглушение выбранного чата для текущего пользователя.", "Чаты");
         chats.MapPut("/{chatId:guid}/read", async (
-            Guid chatId, ReadChatRequest request, ClaimsPrincipal principal, IChatService service, CancellationToken ct) =>
+            Guid chatId, ReadChatRequest request, ClaimsPrincipal principal, IChatService service,
+            IChatEventPublisher publisher, CancellationToken ct) =>
         {
-            await service.MarkReadAsync(UserId(principal), chatId, request.Sequence, ct);
+            var userId = UserId(principal);
+            var sequence = await service.MarkReadAsync(userId, chatId, request.Sequence, ct);
+            await publisher.ReadPositionChangedAsync(new ReadPositionChangedEvent(chatId, userId, sequence), ct);
             return Results.NoContent();
-        }).Document("MarkChatRead", "Отметить чат прочитанным", "Сохраняет последнюю прочитанную последовательность сообщений текущего пользователя.", "Чаты");
+        }).Document("MarkChatRead", "Отметить чат прочитанным", "Сохраняет последнюю прочитанную последовательность сообщений текущего пользователя и отправляет участникам событие ReadPositionChanged.", "Чаты");
         return endpoints;
     }
 

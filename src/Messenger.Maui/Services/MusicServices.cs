@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using Messenger.Contracts.Media;
 using Messenger.Contracts.Music;
 using Messenger.Contracts.Realtime;
+using Messenger.Contracts.Messages;
 
 #if ANDROID || IOS || MACCATALYST || WINDOWS
 using Plugin.Maui.Audio;
@@ -14,6 +15,7 @@ public sealed class AsyncDelay : IAsyncDelay { public Task WaitAsync(TimeSpan de
 public interface IMusicRealtimeClient
 {
     event Func<MusicTrackStatusChangedEvent, Task>? TrackStatusChanged;
+    event Func<MusicTrackUpdatedEvent, Task>? TrackUpdated;
     Task ConnectAsync(CancellationToken ct = default);
 }
 
@@ -25,6 +27,8 @@ public interface IMusicApi
     Task RemoveAsync(Guid id, CancellationToken ct);
     Task<MusicTrackResponse> CreateAsync(Guid audio, string title, string artist, long duration, Guid? cover, CancellationToken ct);
     Task DeclareAsync(Guid id, string statement, CancellationToken ct);
+    Task<MusicTrackResponse> UpdateCoverAsync(Guid id, Guid coverObjectId, CancellationToken ct);
+    Task<MessageResponse> ShareAsync(Guid id, Guid chatId, Guid clientMessageId, CancellationToken ct);
     Task<DownloadAuthorizationResponse> AuthorizeAsync(Guid id, bool download, CancellationToken ct);
 }
 
@@ -36,6 +40,14 @@ public sealed class MusicApiClient(HttpClient http) : IMusicApi
     public Task RemoveAsync(Guid id, CancellationToken ct) => EnsureAsync(http.DeleteAsync($"api/music/library/{id}", ct));
     public async Task<MusicTrackResponse> CreateAsync(Guid audio, string title, string artist, long duration, Guid? cover, CancellationToken ct) => await PostAsync<MusicTrackResponse>("api/music/tracks", new CreateTrackRequest(audio, title, artist, duration, cover), ct);
     public Task DeclareAsync(Guid id, string statement, CancellationToken ct) => EnsureAsync(http.PostAsJsonAsync($"api/music/tracks/{id}/declaration", new RightsDeclarationRequest(statement), ct));
+    public async Task<MusicTrackResponse> UpdateCoverAsync(Guid id, Guid coverObjectId, CancellationToken ct)
+    {
+        using var response = await http.PutAsJsonAsync($"api/music/tracks/{id}/cover", new UpdateTrackCoverRequest(coverObjectId), ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<MusicTrackResponse>(ct) ?? throw new InvalidDataException("Missing track response.");
+    }
+    public Task<MessageResponse> ShareAsync(Guid id, Guid chatId, Guid clientMessageId, CancellationToken ct) =>
+        PostAsync<MessageResponse>($"api/chats/{chatId}/messages", new SendMessageRequest(clientMessageId, "music", null, MusicTrackId: id), ct);
     public async Task<DownloadAuthorizationResponse> AuthorizeAsync(Guid id, bool download, CancellationToken ct) => await http.GetFromJsonAsync<DownloadAuthorizationResponse>($"api/music/tracks/{id}/{(download ? "download" : "stream")}", ct) ?? throw new InvalidDataException("Missing music authorization.");
     private async Task<T> PostAsync<T>(string uri, object body, CancellationToken ct) { using var r = await http.PostAsJsonAsync(uri, body, ct); r.EnsureSuccessStatusCode(); return (await r.Content.ReadFromJsonAsync<T>(ct))!; }
     private static async Task EnsureAsync(Task<HttpResponseMessage> task) { using var r = await task; r.EnsureSuccessStatusCode(); }

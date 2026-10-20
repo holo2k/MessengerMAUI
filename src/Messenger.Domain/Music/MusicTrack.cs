@@ -41,6 +41,15 @@ public sealed class MusicTrack : Entity
     public DateTimeOffset? UpdatedAt { get; private set; }
     public RightsDeclaration? Declaration { get; private set; }
 
+    public void UpdateCover(Guid userId, Guid coverObjectId, DateTimeOffset now)
+    {
+        if (userId != UploaderUserId) throw new MusicRuleException(MusicRuleError.Forbidden);
+        if (Status != MusicTrackStatus.Available || coverObjectId == Guid.Empty)
+            throw new MusicRuleException(MusicRuleError.InvalidState);
+        CoverObjectId = coverObjectId;
+        UpdatedAt = now;
+    }
+
     public RightsDeclaration DeclareRights(Guid userId, string statement, DateTimeOffset now)
     {
         if (userId != UploaderUserId) throw new MusicRuleException(MusicRuleError.Forbidden);

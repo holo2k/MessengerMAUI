@@ -22,6 +22,12 @@ public sealed class MusicViewModel : ObservableObject
     private bool _isPreparing, _shuffle, _isSearchLoading;
     private MusicRepeatMode _repeat;
     private string _queueSource = "Моя музыка";
+    private Guid _currentUserId;
+
+    public event Action<MusicTrackResponse>? TrackUpdated;
+    public void SetCurrentUser(Guid userId) => _currentUserId = userId;
+    public bool CanEditCover(MusicTrackResponse track) =>
+        _currentUserId != Guid.Empty && track.UploaderUserId == _currentUserId && track.Status == "available";
 
     public MusicViewModel(IMusicApi api, IMusicDownloadService downloads, IAudioPlayerService player, IAsyncDelay delay)
     {
@@ -87,6 +93,7 @@ public sealed class MusicViewModel : ObservableObject
     {
         var rows = await api.LibraryAsync(ct);
         Library.Clear(); foreach (var row in rows) Library.Add(row);
+        foreach (var row in rows) ApplyTrackUpdate(row);
     }
     public async Task AddAsync(MusicTrackResponse track, CancellationToken ct = default) { await api.AddAsync(track.Id, ct); if (Library.All(x => x.Id != track.Id)) Library.Add(track); }
     public async Task RemoveAsync(MusicTrackResponse track, CancellationToken ct = default) { await api.RemoveAsync(track.Id, ct); var item = Library.FirstOrDefault(x => x.Id == track.Id); if (item is not null) Library.Remove(item); }
@@ -100,6 +107,26 @@ public sealed class MusicViewModel : ObservableObject
         var track = await api.CreateAsync(audioId, title, artist, duration, cover, ct);
         if (Library.All(x => x.Id != track.Id)) Library.Insert(0, track);
         Status = "Трек загружен";
+    }
+    public async Task UpdateCoverAsync(MusicTrackResponse track, Guid coverObjectId, CancellationToken ct = default)
+    {
+        var updated = await api.UpdateCoverAsync(track.Id, coverObjectId, ct);
+        ApplyTrackUpdate(updated);
+        Status = "Обложка обновлена";
+    }
+    public void ApplyTrackUpdate(MusicTrackResponse track)
+    {
+        foreach (var rows in new[] { Library, SearchResults, Queue })
+            for (var index = 0; index < rows.Count; index++)
+                if (rows[index].Id == track.Id && rows[index] != track) rows[index] = track;
+        for (var index = 0; index < _orderedQueue.Count; index++)
+            if (_orderedQueue[index].Id == track.Id) _orderedQueue[index] = track;
+        if (_currentTrack?.Id == track.Id && _currentTrack != track)
+        {
+            _currentTrack = track;
+            NotifyCurrentTrack();
+        }
+        TrackUpdated?.Invoke(track);
     }
     public async Task DownloadAsync(MusicTrackResponse track, CancellationToken ct = default) { DownloadProgress = 0; await downloads.DownloadAsync(track, new InlineProgress(x => DownloadProgress = x), ct); Status = "Трек скачан"; }
     public Task RemoveDownloadAsync(MusicTrackResponse track) => downloads.RemoveAsync(track.Id);

@@ -10,6 +10,7 @@ public interface IConversationApi
 {
     Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default);
     Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default);
+    Task<IReadOnlyList<ChatMemberResponse>> GetChatMembersAsync(Guid chatId, CancellationToken ct = default);
     Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default);
     Task<ContactResponse?> GetContactByUserAsync(Guid userId, CancellationToken ct = default);
@@ -43,6 +44,9 @@ public sealed class ConversationClient(HttpClient httpClient) : IConversationApi
     public async Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default) =>
         await httpClient.GetFromJsonAsync<ChatResponse>($"api/chats/{chatId}", ct)
         ?? throw new InvalidDataException("Missing chat response.");
+
+    public async Task<IReadOnlyList<ChatMemberResponse>> GetChatMembersAsync(Guid chatId, CancellationToken ct = default) =>
+        await httpClient.GetFromJsonAsync<List<ChatMemberResponse>>($"api/chats/{chatId}/members", ct) ?? [];
 
     public async Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) =>
         await httpClient.GetFromJsonAsync<List<ChatFolderResponse>>("api/chat-folders", ct) ?? [];
@@ -79,9 +83,22 @@ public sealed class ConversationClient(HttpClient httpClient) : IConversationApi
         await httpClient.GetFromJsonAsync<UserSearchResponse>($"api/users/{userId}", ct)
         ?? throw new InvalidDataException("Missing user response.");
 
-    public async Task<IReadOnlyList<MessageResponse>> GetMessagesAsync(Guid chatId, long afterSequence, CancellationToken ct = default) =>
-        (await httpClient.GetFromJsonAsync<MessagePageResponse>(
-            $"api/chats/{chatId}/messages?cursor={afterSequence}&limit=99", ct))?.Items ?? [];
+    public async Task<IReadOnlyList<MessageResponse>> GetMessagesAsync(Guid chatId, long afterSequence, CancellationToken ct = default)
+    {
+        var messages = new List<MessageResponse>();
+        var cursor = afterSequence;
+        while (true)
+        {
+            var page = await httpClient.GetFromJsonAsync<MessagePageResponse>(
+                $"api/chats/{chatId}/messages?cursor={cursor}&limit=99", ct)
+                ?? throw new InvalidDataException("Missing message page.");
+            messages.AddRange(page.Items);
+            if (page.NextCursor is null) return messages;
+            if (!long.TryParse(page.NextCursor, out var next) || next <= cursor)
+                throw new InvalidDataException("Invalid message cursor.");
+            cursor = next;
+        }
+    }
 
     public async Task ReorderFoldersAsync(IReadOnlyList<Guid> folderIds, CancellationToken ct = default) =>
         await EnsureAsync(await httpClient.PutAsJsonAsync("api/chat-folders/order", new ReorderChatFoldersRequest(folderIds), ct));

@@ -81,6 +81,7 @@ public static class MauiProgram
 			services.GetRequiredService<IAudioManager>(), new HttpClient()));
 #endif
 		builder.Services.AddTransient<MusicViewModel>();
+		builder.Services.AddTransient<MusicTrackActions>();
 		builder.Services.AddTransient<MusicPage>();
 		builder.Services.AddSingleton<ISettingsApi, SettingsApi>();
 		builder.Services.AddTransient<SettingsViewModel>();

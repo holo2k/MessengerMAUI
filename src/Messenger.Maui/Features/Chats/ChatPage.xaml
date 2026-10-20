@@ -42,7 +42,9 @@
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="messages:MessageResponse">
                             <ui:MessageBubble Message="{Binding .}" CurrentUserId="{Binding Source={x:Reference ChatScreen}, Path=CurrentUserId, x:DataType=chats:ChatPage}"
-                                              ReadSequence="{Binding Source={x:Reference ChatScreen}, Path=ReadSequence, x:DataType=chats:ChatPage}" />
+                                              ReadSequence="{Binding Source={x:Reference ChatScreen}, Path=ReadSequence, x:DataType=chats:ChatPage}"
+                                              Player="{Binding Source={x:Reference ChatScreen}, Path=Music, x:DataType=chats:ChatPage}"
+                                              TrackOpened="OnMusicTrackOpened" TrackPlaybackRequested="OnMusicPlaybackRequested" />
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
                 </CollectionView>

@@ -48,6 +48,7 @@ public sealed class ChatListItem(
                     "image" => "Фото",
                     "video" => "Видео",
                     "audio" => "Аудио",
+                    "music" => string.IsNullOrWhiteSpace(message.Body) ? "Музыка" : $"♫ {message.Body}",
                     "file" => "Файл",
                     _ => "Сообщение"
                 };

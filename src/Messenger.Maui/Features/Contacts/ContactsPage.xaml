@@ -3,7 +3,7 @@
              xmlns:contacts="clr-namespace:Messenger.Contracts.Contacts;assembly=Messenger.Contracts"
              xmlns:vm="clr-namespace:Messenger.Maui.Features.Contacts" xmlns:ui="clr-namespace:Messenger.Maui.Controls"
              x:Class="Messenger.Maui.Features.Contacts.ContactsPage" x:DataType="vm:ContactsViewModel"
-             Title="Контакты" Shell.NavBarIsVisible="False" BackgroundColor="{StaticResource PageBackground}">
+             Title="Контакты" Shell.NavBarIsVisible="False" BackgroundColor="{StaticResource White}">
     <Grid RowDefinitions="Auto,*">
         <Grid ColumnDefinitions="*,Auto" Padding="12,6" BackgroundColor="{StaticResource BarBackground}">
             <Border Style="{StaticResource SearchField}">

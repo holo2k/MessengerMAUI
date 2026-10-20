@@ -4,4 +4,5 @@ public sealed record CreateTrackRequest(Guid AudioObjectId, string Title, string
 public sealed record RightsDeclarationRequest(string Statement);
 public sealed record CopyrightClaimRequest(string Details);
 public sealed record ModerateTrackRequest(string Action, string Reason);
-public sealed record MusicTrackResponse(Guid Id, string Title, string Artist, long DurationMs, Guid? CoverObjectId, string Status);
+public sealed record UpdateTrackCoverRequest(Guid CoverObjectId);
+public sealed record MusicTrackResponse(Guid Id, string Title, string Artist, long DurationMs, Guid? CoverObjectId, string Status, Guid UploaderUserId = default);

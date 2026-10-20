@@ -8,7 +8,8 @@ public enum MessageKind
     Image = 1,
     Video = 2,
     Audio = 3,
-    File = 4
+    File = 4,
+    Music = 5
 }
 
 public enum MessageRuleError
@@ -73,6 +74,14 @@ public sealed class Message : Entity
     public DateTimeOffset? EditedAt { get; private set; }
     public DateTimeOffset? DeletedAt { get; private set; }
     public Guid? DeletedByUserId { get; private set; }
+    public Guid? MusicTrackId { get; private set; }
+
+    public void AttachMusic(Guid trackId)
+    {
+        if (Kind != MessageKind.Music || trackId == Guid.Empty || MusicTrackId is not null)
+            throw new MessageRuleException(MessageRuleError.InvalidBody);
+        MusicTrackId = trackId;
+    }
 
     public void Edit(
         Guid requesterUserId,

@@ -58,6 +58,26 @@ public sealed class ContactChatServiceTests
         Assert.Null(store.Members.Single(member => member.ChatId == created.Id && member.UserId == firstId).HiddenAt);
     }
 
+    [Fact]
+    public async Task Read_position_is_bounded_by_committed_messages_monotonic_and_member_only()
+    {
+        var store = new MemorySocialStore();
+        var senderId = store.AddUser();
+        var readerId = store.AddUser();
+        var outsiderId = store.AddUser();
+        var service = new ChatService(store, new FixedClock());
+        var chat = await service.CreateDirectAsync(senderId, readerId);
+        chat.NextMessageSequence(FixedClock.Now);
+        chat.NextMessageSequence(FixedClock.Now);
+
+        Assert.Equal(2, await service.MarkReadAsync(readerId, chat.Id, long.MaxValue));
+        Assert.Equal(2, await service.MarkReadAsync(readerId, chat.Id, 1));
+        Assert.Equal(0, store.Members.Single(member => member.UserId == senderId).LastReadSequence);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.MarkReadAsync(readerId, chat.Id, -1));
+        Assert.Equal(ChatRuleError.NotFound,
+            (await Assert.ThrowsAsync<ChatRuleException>(() => service.MarkReadAsync(outsiderId, chat.Id, 2))).Code);
+    }
+
     private sealed class FixedClock : IClock
     {
         public static readonly DateTimeOffset Now = new(2026, 10, 3, 7, 0, 0, TimeSpan.Zero);
@@ -145,5 +165,12 @@ public sealed class ContactChatServiceTests
         }
 
         public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<long> AdvanceReadPositionAsync(Guid chatId, Guid userId, long sequence, CancellationToken cancellationToken)
+        {
+            var member = Members.Single(value => value.ChatId == chatId && value.UserId == userId);
+            member.MarkRead(sequence);
+            return Task.FromResult(member.LastReadSequence);
+        }
     }
 }

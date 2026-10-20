@@ -28,11 +28,11 @@
                 <ImageButton Grid.Column="2" Source="music_more.png" Clicked="OnCurrentTrackMenuClicked" Style="{StaticResource PlayerIcon}" SemanticProperties.Description="Действия с треком" />
             </Grid>
             <ScrollView Grid.Row="1">
-                <VerticalStackLayout Padding="28,12,28,12" Spacing="24" VerticalOptions="Center">
+                <VerticalStackLayout Padding="0,0,0,12" Spacing="24">
                     <Grid x:Name="ArtworkArea" SizeChanged="OnArtworkAreaSizeChanged" HorizontalOptions="Fill">
-                        <ui:MusicArtworkView x:Name="HeroArtwork" Track="{Binding CurrentTrack}" WidthRequest="220" HeightRequest="220" HorizontalOptions="Center" />
+                        <ui:MusicArtworkView x:Name="HeroArtwork" Track="{Binding CurrentTrack}" HeightRequest="220" HorizontalOptions="Fill" CornerRadius="0" />
                     </Grid>
-                    <Grid ColumnDefinitions="*,48" ColumnSpacing="12" Margin="0,4,0,0">
+                    <Grid ColumnDefinitions="*,48" ColumnSpacing="12" Margin="28,4,28,0">
                         <VerticalStackLayout Spacing="6" VerticalOptions="Center">
                             <Label Text="{Binding CurrentTrack.Title}" TextColor="{StaticResource Black}" FontSize="25" FontAttributes="Bold" LineBreakMode="TailTruncation" MaxLines="2" />
                             <Label Text="{Binding CurrentTrack.Artist}" TextColor="{StaticResource TextSecondary}" FontSize="16" LineBreakMode="TailTruncation" />
@@ -40,7 +40,7 @@
                         <ImageButton Grid.Column="1" Source="{Binding IsCurrentTrackSaved, Converter={StaticResource DisplayValue}, ConverterParameter=savedIcon}"
                                      Clicked="OnToggleSavedClicked" Style="{StaticResource PlayerIcon}" SemanticProperties.Description="Добавить или убрать из моей музыки" />
                     </Grid>
-                    <VerticalStackLayout Spacing="4">
+                    <VerticalStackLayout Spacing="4" Margin="28,0">
                         <Grid HeightRequest="32">
                             <ProgressBar Progress="{Binding BufferedProgress}" ProgressColor="{StaticResource PrimarySoft}" BackgroundColor="{StaticResource Separator}" Margin="10,0" HeightRequest="3" VerticalOptions="Center" InputTransparent="True" />
                             <Slider x:Name="PlaybackSlider" Minimum="0" Maximum="1" Value="{Binding PlaybackProgress, Mode=OneWay}" IsEnabled="{Binding CanSeek}"
@@ -54,7 +54,7 @@
                                 <ui:SkeletonBar IsVisible="{Binding IsTimingLoading}" HorizontalOptions="End" /></Grid>
                         </Grid>
                     </VerticalStackLayout>
-                    <Grid ColumnDefinitions="*,*,88,*,*" ColumnSpacing="4">
+                    <Grid ColumnDefinitions="*,*,88,*,*" ColumnSpacing="4" Margin="28,0">
                         <Grid VerticalOptions="Center">
                             <ImageButton Source="music_shuffle.png" Clicked="OnShuffleClicked" Style="{StaticResource PlayerIcon}" SemanticProperties.Description="Перемешать очередь" />
                             <Ellipse Fill="{StaticResource Primary}" WidthRequest="4" HeightRequest="4" VerticalOptions="End" HorizontalOptions="Center" IsVisible="{Binding IsShuffleEnabled}" InputTransparent="True" />
@@ -75,7 +75,7 @@
                         </Grid>
                     </Grid>
                     <Label Text="{Binding PlaybackStateText}" FontSize="11" CharacterSpacing="0.5" TextColor="{StaticResource TextSecondary}" HorizontalTextAlignment="Center" />
-                    <Border BackgroundColor="#FFF0ED" Stroke="#F0C7C0" StrokeShape="RoundRectangle 16" Padding="16,12" IsVisible="{Binding HasPlaybackError}">
+                    <Border BackgroundColor="#FFF0ED" Stroke="#F0C7C0" StrokeShape="RoundRectangle 16" Padding="16,12" Margin="28,0" IsVisible="{Binding HasPlaybackError}">
                         <VerticalStackLayout Spacing="8">
                             <Label Text="{Binding PlaybackError}" TextColor="#9F3A30" FontSize="13" HorizontalTextAlignment="Center" />
                             <Button Text="Попробовать снова" Clicked="OnRetryClicked" TextColor="{StaticResource Black}" BackgroundColor="Transparent" FontAttributes="Bold" />

@@ -210,5 +210,11 @@ public sealed class MessageServiceTests
         public Task AddGroupAsync(Chat chat, IReadOnlyCollection<ChatMember> members, CancellationToken ct) => throw new NotSupportedException();
         public Task AddMemberAsync(ChatMember member, CancellationToken ct) => throw new NotSupportedException();
         public Task SaveChangesAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task<long> AdvanceReadPositionAsync(Guid chatId, Guid userId, long sequence, CancellationToken ct)
+        {
+            var member = Members.Single(value => value.ChatId == chatId && value.UserId == userId);
+            member.MarkRead(sequence);
+            return Task.FromResult(member.LastReadSequence);
+        }
     }
 }

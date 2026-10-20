@@ -9,6 +9,8 @@ public sealed class MessageBubble : ContentView
         nameof(Message), typeof(MessageResponse), typeof(MessageBubble), null, propertyChanged: Refresh);
     public static readonly BindableProperty CurrentUserIdProperty = BindableProperty.Create(
         nameof(CurrentUserId), typeof(Guid), typeof(MessageBubble), Guid.Empty, propertyChanged: Refresh);
+    public static readonly BindableProperty ReadSequenceProperty = BindableProperty.Create(
+        nameof(ReadSequence), typeof(long), typeof(MessageBubble), 0L, propertyChanged: Refresh);
 
     public MessageBubble()
     {
@@ -18,6 +20,7 @@ public sealed class MessageBubble : ContentView
 
     public MessageResponse? Message { get => (MessageResponse?)GetValue(MessageProperty); set => SetValue(MessageProperty, value); }
     public Guid CurrentUserId { get => (Guid)GetValue(CurrentUserIdProperty); set => SetValue(CurrentUserIdProperty, value); }
+    public long ReadSequence { get => (long)GetValue(ReadSequenceProperty); set => SetValue(ReadSequenceProperty, value); }
 
     private static void Refresh(BindableObject bindable, object oldValue, object newValue) => ((MessageBubble)bindable).Render();
 
@@ -27,11 +30,24 @@ public sealed class MessageBubble : ContentView
         var outgoing = CurrentUserId != Guid.Empty && message.SenderUserId == CurrentUserId;
         var stack = new VerticalStackLayout { Spacing = 3 };
         stack.Add(new Label { Text = DisplayValueConverter.MessageText(message), FontSize = 16, LineBreakMode = LineBreakMode.WordWrap });
-        stack.Add(new Label
+        var metadata = new HorizontalStackLayout { Spacing = 4, HorizontalOptions = LayoutOptions.End };
+        metadata.Add(new Label
         {
             Text = $"{(message.IsPinned ? "Закреплено · " : "")}{(message.EditedAt.HasValue ? "изменено · " : "")}{message.CreatedAt.ToLocalTime():dd.MM.yyyy HH:mm}",
             FontSize = 10, TextColor = Color.FromArgb("#929292"), HorizontalOptions = LayoutOptions.End
         });
+        if (outgoing && message.DeletedAt is null)
+        {
+            var read = message.Sequence <= ReadSequence;
+            var receipt = new Image
+            {
+                Source = read ? "message_read.png" : "message_sent.png",
+                WidthRequest = 18, HeightRequest = 14, VerticalOptions = LayoutOptions.Center
+            };
+            SemanticProperties.SetDescription(receipt, read ? "Прочитано" : "Отправлено");
+            metadata.Add(receipt);
+        }
+        stack.Add(metadata);
         Content = new Border
         {
             Padding = new Thickness(10, 6), StrokeThickness = 0,

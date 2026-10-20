@@ -143,4 +143,12 @@ public sealed class UploadService(
             throw new MediaException(MediaError.NotFound);
         }
     }
+
+    public async Task ValidateOwnedImageAsync(Guid actorId, Guid objectId, CancellationToken ct = default)
+    {
+        await ValidateOwnedAvailableAsync(actorId, objectId, ct);
+        var value = await store.FindObjectAsync(objectId, ct);
+        if (value?.ContentType is not ("image/jpeg" or "image/png"))
+            throw new MediaException(MediaError.FileTypeMismatch);
+    }
 }

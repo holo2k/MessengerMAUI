@@ -88,10 +88,8 @@ public sealed class ChatListItem(
 
 public sealed class ChatsViewModel(IConversationApi api)
 {
-    private Guid? _selectedFolderId;
     private Guid _currentUserId;
     private long _upsertVersion;
-    public ObservableCollection<ChatFolderResponse> Folders { get; } = [];
     public ObservableCollection<ChatListItem> Chats { get; } = [];
     public ObservableCollection<ChatListItem> VisibleChats { get; } = [];
 
@@ -100,35 +98,26 @@ public sealed class ChatsViewModel(IConversationApi api)
         while (true)
         {
             var version = _upsertVersion;
-            var folders = await api.GetFoldersAsync(cancellationToken);
             var chats = await api.GetChatsAsync(cancellationToken);
             if (version != _upsertVersion)
             {
                 continue;
             }
 
-            Folders.Clear();
-            foreach (var folder in folders)
-            {
-                Folders.Add(folder);
-            }
             Chats.Clear();
             foreach (var chat in chats)
             {
                 Chats.Add(new ChatListItem(chat, 0, _currentUserId));
             }
-            SelectFolder(_selectedFolderId);
+            RefreshVisibleChats();
             return;
         }
     }
 
-    public void SelectFolder(Guid? folderId)
+    private void RefreshVisibleChats()
     {
-        _selectedFolderId = folderId;
-        var folder = Folders.FirstOrDefault(value => value.Id == folderId);
         VisibleChats.Clear();
-        foreach (var item in Chats.Where(item => !item.Chat.IsHidden && !item.Chat.IsArchived &&
-                     (folder is null || folder.ChatIds.Contains(item.Chat.Id)))
+        foreach (var item in Chats.Where(item => !item.Chat.IsHidden && !item.Chat.IsArchived)
                  .OrderByDescending(item => item.Chat.LastMessage?.CreatedAt ?? item.Chat.UpdatedAt))
         {
             VisibleChats.Add(item);
@@ -160,17 +149,7 @@ public sealed class ChatsViewModel(IConversationApi api)
             item.IncrementUnread();
         }
 
-        SelectFolder(_selectedFolderId);
-    }
-
-    public async Task MoveFolderAsync(int oldIndex, int newIndex, CancellationToken cancellationToken = default)
-    {
-        if (oldIndex == newIndex)
-        {
-            return;
-        }
-        Folders.Move(oldIndex, newIndex);
-        await api.ReorderFoldersAsync(Folders.Select(folder => folder.Id).ToArray(), cancellationToken);
+        RefreshVisibleChats();
     }
 
     public async Task ApplyBulkAsync(

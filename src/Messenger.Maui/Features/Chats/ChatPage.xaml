@@ -57,10 +57,15 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="chats:ComposerAttachment">
                     <Border BackgroundColor="{StaticResource PrimarySoft}" StrokeShape="RoundRectangle 8" Padding="8" Margin="8,4">
-                        <VerticalStackLayout WidthRequest="140" Spacing="6">
+                        <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnAttachmentTapped" CommandParameter="{Binding .}" /></Border.GestureRecognizers>
+                        <Grid WidthRequest="170" ColumnDefinitions="*,24" RowDefinitions="Auto,Auto,Auto" RowSpacing="3">
                             <Label Text="{Binding Selection.FileName}" FontSize="12" LineBreakMode="TailTruncation" />
-                            <ProgressBar Progress="{Binding Progress}" />
-                        </VerticalStackLayout>
+                            <Button Grid.Column="1" Grid.RowSpan="3" Text="✕" Padding="0" MinimumWidthRequest="24" MinimumHeightRequest="24" FontSize="13" Clicked="OnRemoveAttachmentClicked" CommandParameter="{Binding .}" SemanticProperties.Description="Убрать вложение" />
+                            <ProgressBar Grid.Row="1" Progress="{Binding Progress}" />
+                            <Label Grid.Row="2" Text="Повторить загрузку" FontSize="10" TextColor="{StaticResource Danger}" IsVisible="False">
+                                <Label.Triggers><DataTrigger TargetType="Label" Binding="{Binding State}" Value="{x:Static chats:UploadItemState.Failed}"><Setter Property="IsVisible" Value="True" /></DataTrigger></Label.Triggers>
+                            </Label>
+                        </Grid>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
@@ -74,6 +79,12 @@
             <ImageButton x:Name="CameraButton" Grid.Column="2" Source="icon_camera.png" Clicked="OnPhotoClicked" SemanticProperties.Description="Добавить фото" />
             <ImageButton x:Name="AudioButton" Grid.Column="3" Source="icon_mic.png" Clicked="OnAudioClicked" SemanticProperties.Description="Добавить аудио" />
             <ImageButton x:Name="SendButton" Grid.Column="3" Source="icon_send.png" Clicked="OnSendClicked" IsVisible="False" SemanticProperties.Description="Отправить сообщение" />
+        </Grid>
+        <Grid x:Name="AttachmentOverlay" Grid.RowSpan="6" ZIndex="30" IsVisible="False" SizeChanged="OnAttachmentOverlaySizeChanged">
+            <BoxView Color="#66000000"><BoxView.GestureRecognizers><TapGestureRecognizer Tapped="OnAttachmentBackdropTapped" /></BoxView.GestureRecognizers></BoxView>
+            <Border x:Name="AttachmentSheet" HeightRequest="480" VerticalOptions="End" BackgroundColor="{StaticResource White}" StrokeShape="RoundRectangle 24,24,0,0" StrokeThickness="0">
+                <Grid SafeAreaEdges="Container,None,Container,Container"><ContentView x:Name="AttachmentPickerHost" /></Grid>
+            </Border>
         </Grid>
     </Grid>
 </ContentPage>

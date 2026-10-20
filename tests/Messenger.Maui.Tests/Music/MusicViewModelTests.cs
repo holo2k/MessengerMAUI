@@ -1,5 +1,6 @@
 using Messenger.Contracts.Media;
 using Messenger.Contracts.Music;
+using Messenger.Contracts.Messages;
 using Messenger.Maui.Features.Music;
 using Messenger.Maui.Services;
 
@@ -257,6 +258,37 @@ public sealed class MusicViewModelTests
         vm.TogglePause();
         Assert.False(vm.IsPlaying);
     }
+    [Fact]
+    public async Task Cover_update_reaches_library_search_queue_and_current_track_without_restarting_playback()
+    {
+        var api = new FakeMusicApi();
+        var player = new FakePlayer { DurationMs = 100_000 };
+        var vm = new MusicViewModel(api, new FakeDownloads(), player, new ImmediateDelay());
+        var userId = Guid.NewGuid();
+        var track = Track() with { UploaderUserId = userId };
+        vm.SetCurrentUser(userId);
+        Assert.True(vm.CanEditCover(track));
+        Assert.False(vm.CanEditCover(track with { UploaderUserId = Guid.NewGuid() }));
+        vm.Library.Add(track);
+        vm.SearchResults.Add(track);
+        await vm.PlayFromQueueAsync(track, [track, Track()], "Моя музыка");
+        player.PositionMs = 15_000;
+        vm.RefreshPlayback();
+        var cover = Guid.NewGuid();
+
+        await vm.UpdateCoverAsync(track, cover);
+
+        Assert.Equal(cover, vm.CurrentTrack!.CoverObjectId);
+        Assert.Equal(cover, Assert.Single(vm.Library).CoverObjectId);
+        Assert.Equal(cover, Assert.Single(vm.SearchResults).CoverObjectId);
+        Assert.Equal(cover, vm.Queue.Single(item => item.Id == track.Id).CoverObjectId);
+        Assert.Equal(15_000, vm.PositionMs);
+        Assert.Single(player.PlayedSources);
+        vm.ToggleShuffle();
+        vm.ToggleShuffle();
+        Assert.Equal(cover, vm.Queue.Single(item => item.Id == track.Id).CoverObjectId);
+    }
+
     private sealed class ImmediateDelay : IAsyncDelay { public Task WaitAsync(TimeSpan delay, CancellationToken ct) { ct.ThrowIfCancellationRequested(); return Task.CompletedTask; } }
     private sealed class ControlledDebounceDelay : IAsyncDelay
     {
@@ -282,6 +314,9 @@ public sealed class MusicViewModelTests
         public Task RemoveAsync(Guid id, CancellationToken ct) { RemoveCalls++; return Task.CompletedTask; }
         public Task<MusicTrackResponse> CreateAsync(Guid audio, string title, string artist, long duration, Guid? cover, CancellationToken ct) { CreateCalls++; return Task.FromResult(Track()); }
         public Task DeclareAsync(Guid id, string statement, CancellationToken ct) { Declarations++; return Task.CompletedTask; }
+        public Task<MusicTrackResponse> UpdateCoverAsync(Guid id, Guid coverObjectId, CancellationToken ct) =>
+            Task.FromResult(Track() with { Id = id, CoverObjectId = coverObjectId });
+        public Task<MessageResponse> ShareAsync(Guid id, Guid chatId, Guid clientMessageId, CancellationToken ct) => throw new NotSupportedException();
         public Task<DownloadAuthorizationResponse> AuthorizeAsync(Guid id, bool download, CancellationToken ct) => AuthorizeOperation?.Invoke(id, ct) ?? Task.FromResult(new DownloadAuthorizationResponse("https://audio", DateTimeOffset.UtcNow.AddMinutes(5)));
     }
     private sealed class FakeDownloads : IMusicDownloadService

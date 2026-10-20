@@ -1,6 +1,7 @@
 using Messenger.Contracts.Music;
 using Messenger.Maui.Services;
 using Messenger.Contracts.Realtime;
+using Messenger.Maui.Controls;
 
 namespace Messenger.Maui.Features.Music;
 
@@ -10,23 +11,22 @@ public partial class MusicPage : ContentPage
     private readonly IMusicFilePicker _musicFiles;
     private readonly IMediaUploader _uploader;
     private readonly IMusicRealtimeClient _realtime;
+    private readonly MusicTrackActions _trackActions;
     private bool _isSearching;
     public Guid? CurrentTrackId => _viewModel?.CurrentTrack?.Id;
-    public MusicPage(MusicViewModel viewModel, IMusicFilePicker musicFiles, IMediaUploader uploader, IMusicRealtimeClient realtime)
+    public MusicPage(MusicViewModel viewModel, IMusicFilePicker musicFiles, IMediaUploader uploader, IMusicRealtimeClient realtime, MusicTrackActions trackActions)
     {
         InitializeComponent(); BindingContext = _viewModel = viewModel;
         _viewModel.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(MusicViewModel.CurrentTrack)) OnPropertyChanged(nameof(CurrentTrackId)); };
         _musicFiles = musicFiles; _uploader = uploader; _realtime = realtime;
-        _realtime.TrackStatusChanged += OnTrackStatusChangedAsync;
+        _trackActions = trackActions;
+        MiniPlayerHost.Content = new MiniPlayerView(viewModel, () => MusicPlayerPage.OpenAsync(Navigation, viewModel));
     }
     protected override async void OnAppearing()
     {
         base.OnAppearing(); _viewModel.RefreshPlayback();
         await SafeAsync(_viewModel.LoadLibraryAsync); await SafeAsync(_realtime.ConnectAsync);
     }
-    private Task OnTrackStatusChangedAsync(MusicTrackStatusChangedEvent value) => value.Status is "blocked" or "deleted"
-        ? MainThread.InvokeOnMainThreadAsync(() => _viewModel.OnTrackBlockedAsync(value.TrackId, value.Reason))
-        : Task.CompletedTask;
     private async void OnSearchClicked(object? s, EventArgs e) => await SearchVisibleAsync();
     private async Task SearchVisibleAsync()
     {
@@ -85,11 +85,7 @@ public partial class MusicPage : ContentPage
     }
     private async Task ShowTrackMenuAsync(MusicTrackResponse track)
     {
-        var saved = _viewModel.Library.Any(x => x.Id == track.Id);
-        var libraryAction = saved ? "Убрать из моей музыки" : "Добавить в мою музыку";
-        var action = await DisplayActionSheetAsync(track.Title, "Отмена", null, libraryAction, "Скачать трек");
-        if (action == libraryAction) await SafeAsync(ct => saved ? _viewModel.RemoveAsync(track, ct) : _viewModel.AddAsync(track, ct));
-        if (action == "Скачать трек") await SafeAsync(ct => _viewModel.DownloadAsync(track, ct));
+        await SafeAsync(_ => _trackActions.ShowAsync(this, _viewModel, track));
     }
     private async void OnUploadClicked(object? s, EventArgs e)
     {
@@ -105,9 +101,14 @@ public partial class MusicPage : ContentPage
                 if (string.IsNullOrWhiteSpace(title)) return;
                 var artist = await DisplayPromptAsync("Трек", "Исполнитель");
                 if (string.IsNullOrWhiteSpace(artist)) return;
+                var coverAction = await DisplayActionSheetAsync("Обложка песни", "Отмена", null, "Выбрать изображение", "Без обложки");
+                if (coverAction is not ("Выбрать изображение" or "Без обложки")) return;
+                var cover = coverAction == "Выбрать изображение" ? await MusicCoverPicker.PickAsync(ct) : null;
+                if (coverAction == "Выбрать изображение" && cover is null) return;
                 UploadButton.Text = "Загрузка…";
+                Guid? coverId = cover is null ? null : (await _uploader.UploadAsync(cover, null, ct)).Id;
                 var stored = await _uploader.UploadAsync(selection, null, ct);
-                await _viewModel.UploadAsync(stored.Id, title.Trim(), artist.Trim(), selection.DurationMs!.Value, null, ct);
+                await _viewModel.UploadAsync(stored.Id, title.Trim(), artist.Trim(), selection.DurationMs!.Value, coverId, ct);
             });
         }
         finally

@@ -7,7 +7,7 @@
              x:Class="Messenger.Maui.Features.Chats.ChatPage" x:Name="ChatScreen" x:DataType="chats:ChatViewModel"
              Title="Чат" Shell.NavBarIsVisible="False" Shell.TabBarIsVisible="False"
              Padding="0" SafeAreaEdges="None" BackgroundColor="{StaticResource BarBackground}">
-    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" BackgroundColor="{StaticResource BarBackground}" SafeAreaEdges="SoftInput">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" BackgroundColor="{StaticResource BarBackground}" SafeAreaEdges="SoftInput">
         <Grid x:Name="ChatHeader" ColumnDefinitions="44,34,*,44,44" ColumnSpacing="4" Margin="0" Padding="0,2,4,2"
               SafeAreaEdges="Container,Container,Container,None" BackgroundColor="{StaticResource BarBackground}" MinimumHeightRequest="48">
             <ImageButton Source="icon_back.png" Clicked="OnBackClicked" SemanticProperties.Description="Назад к чатам" />
@@ -24,12 +24,13 @@
             <ImageButton Grid.Column="3" Source="icon_search.png" Clicked="OnToggleSearchClicked" SemanticProperties.Description="Поиск сообщений" />
             <ImageButton Grid.Column="4" Source="icon_more.png" Clicked="OnMoreClicked" SemanticProperties.Description="Действия чата" />
         </Grid>
-        <Grid x:Name="SearchPanel" Grid.Row="1" ColumnDefinitions="*,Auto,Auto" BackgroundColor="{StaticResource BarBackground}" Padding="12,4" IsVisible="False">
+        <ContentView x:Name="MiniPlayerHost" Grid.Row="1" IsVisible="False" />
+        <Grid x:Name="SearchPanel" Grid.Row="2" ColumnDefinitions="*,Auto,Auto" BackgroundColor="{StaticResource BarBackground}" Padding="12,4" IsVisible="False">
             <Entry x:Name="SearchEntry" Placeholder="Поиск по сообщениям" ReturnType="Search" Completed="OnSearchClicked" />
             <Button Grid.Column="1" Text="Найти" Clicked="OnSearchClicked" FontSize="14" />
             <Button Grid.Column="2" Text="Сброс" Clicked="OnResetSearchClicked" FontSize="14" />
         </Grid>
-        <Grid Grid.Row="2" BackgroundColor="{StaticResource ChatBackground}">
+        <Grid Grid.Row="3" BackgroundColor="{StaticResource ChatBackground}">
             <Image Source="chat_wallpaper.png" Aspect="AspectFill" InputTransparent="True" />
             <Grid Padding="0,8">
                 <CollectionView x:Name="MessagesList" ItemsSource="{Binding Messages}" ItemsUpdatingScrollMode="KeepLastItemInView"
@@ -50,7 +51,7 @@
                 </CollectionView>
             </Grid>
         </Grid>
-        <CollectionView Grid.Row="3" ItemsSource="{Binding Media.Attachments}" HeightRequest="60" BackgroundColor="{StaticResource BarBackground}"
+        <CollectionView Grid.Row="4" ItemsSource="{Binding Media.Attachments}" HeightRequest="60" BackgroundColor="{StaticResource BarBackground}"
                         IsVisible="{Binding Media.Attachments.Count, Converter={StaticResource DisplayValue}, ConverterParameter=positive}">
             <CollectionView.ItemsLayout><LinearItemsLayout Orientation="Horizontal" ItemSpacing="8" /></CollectionView.ItemsLayout>
             <CollectionView.ItemTemplate>
@@ -64,7 +65,7 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
-        <Grid x:Name="MessageComposer" Grid.Row="4" ColumnDefinitions="44,*,44,44" BackgroundColor="{StaticResource BarBackground}"
+        <Grid x:Name="MessageComposer" Grid.Row="5" ColumnDefinitions="44,*,44,44" BackgroundColor="{StaticResource BarBackground}"
               Margin="0" Padding="0,4,4,4" SafeAreaEdges="Container,None,Container,Container" ColumnSpacing="2">
             <ImageButton Source="icon_plus.png" Clicked="OnAttachClicked" SemanticProperties.Description="Прикрепить вложение" />
             <Border Grid.Column="1" Stroke="{StaticResource Separator}" StrokeThickness="1" StrokeShape="RoundRectangle 18" BackgroundColor="White" Padding="12,0">

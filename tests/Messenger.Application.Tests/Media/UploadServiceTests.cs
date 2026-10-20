@@ -86,6 +86,20 @@ public sealed class UploadServiceTests
         return new TestFixture(owner, clock, objects, store, service, command);
     }
 
+    [Fact]
+    public async Task Track_cover_requires_an_owned_available_image()
+    {
+        var fixture = Fixture(Png, "image/png", "cover.png");
+        var upload = await fixture.Service.CreateAsync(fixture.Owner, fixture.Command);
+        var image = await fixture.Service.CompleteAsync(fixture.Owner, upload.Id);
+        await fixture.Service.ValidateOwnedImageAsync(fixture.Owner, image.Id);
+        await Assert.ThrowsAsync<MediaException>(() => fixture.Service.ValidateOwnedImageAsync(Guid.NewGuid(), image.Id));
+        var audio = new StoredObject(Guid.NewGuid(), fixture.Owner, "audio", "audio.mp3", "audio/mpeg", 10, "sha", StoredObjectStatus.Available, fixture.Clock.UtcNow);
+        fixture.Store.Objects.Add(audio);
+        Assert.Equal(MediaError.FileTypeMismatch, (await Assert.ThrowsAsync<MediaException>(() =>
+            fixture.Service.ValidateOwnedImageAsync(fixture.Owner, audio.Id))).Code);
+    }
+
     private sealed record TestFixture(
         Guid Owner, MutableClock Clock, MemoryObjectStore Objects, MemoryUploadStore Store,
         UploadService Service, CreateUploadCommand InitialCommand)

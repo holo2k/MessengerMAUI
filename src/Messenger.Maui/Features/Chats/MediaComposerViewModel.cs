@@ -23,6 +23,7 @@ public sealed class MediaComposerViewModel(
     IMediaUploader uploader,
     IAvatarClient avatars) : ObservableObject
 {
+    public const int MaxAttachments = 10;
     private string? _status;
     public ObservableCollection<ComposerAttachment> Attachments { get; } = [];
     public string? Status { get => _status; private set => SetProperty(ref _status, value); }
@@ -34,6 +35,8 @@ public sealed class MediaComposerViewModel(
 
     public async Task AddAsync(MediaKind kind, CancellationToken ct = default)
     {
+        if (Attachments.Count >= MaxAttachments)
+            throw new InvalidOperationException("К сообщению можно прикрепить не больше 10 файлов.");
         var result = await capture.AcquireAsync(kind, ct);
         if (result.Status == MediaCaptureStatus.PermissionDenied)
         {
@@ -41,9 +44,17 @@ public sealed class MediaComposerViewModel(
             return;
         }
         if (result.Selection is null) return;
-        var item = new ComposerAttachment(result.Selection);
-        Attachments.Add(item);
-        await UploadAsync(item, ct);
+        await AddSelectionsAsync([result.Selection], ct);
+    }
+
+    public async Task AddSelectionsAsync(IReadOnlyList<MediaSelection> selections, CancellationToken ct = default)
+    {
+        if (Attachments.Count + selections.Count > MaxAttachments)
+            throw new InvalidOperationException("К сообщению можно прикрепить не больше 10 файлов.");
+        var items = selections.Select(selection => new ComposerAttachment(selection)).ToArray();
+        foreach (var item in items) Attachments.Add(item);
+        foreach (var item in items) await UploadAsync(item, ct);
+        if (items.Any(item => item.State == UploadItemState.Failed)) Status = "Не все файлы загружены. Нажмите на вложение, чтобы повторить загрузку.";
     }
 
     public Task RetryAsync(ComposerAttachment item, CancellationToken ct = default) => UploadAsync(item, ct);

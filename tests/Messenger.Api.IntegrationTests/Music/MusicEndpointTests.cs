@@ -7,6 +7,8 @@ using Messenger.Application.Music;
 using Messenger.Contracts.Auth;
 using Messenger.Contracts.Media;
 using Messenger.Contracts.Music;
+using Messenger.Contracts.Chats;
+using Messenger.Contracts.Messages;
 using Messenger.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,6 +59,77 @@ public sealed class MusicEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/music/tracks/{track.Id}/stream")).StatusCode);
         await using var auditScope = factory.Services.CreateAsyncScope();
         Assert.Equal(1, await auditScope.ServiceProvider.GetRequiredService<MessengerDbContext>().ModerationActions.CountAsync());
+    }
+
+    [Fact]
+    public async Task Covers_are_visible_to_listeners_and_shared_songs_keep_the_current_cover_and_access_checks()
+    {
+        await using var factory = new MessengerApiFactory(_postgres.GetConnectionString(), "Development", 100, 100,
+            _minio.GetConnectionString(), _minio.GetAccessKey(), _minio.GetSecretKey());
+        await using (var scope = factory.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<MessengerDbContext>().Database.MigrateAsync();
+        using var ownerClient = factory.CreateClient();
+        using var listenerClient = factory.CreateClient();
+        using var outsiderClient = factory.CreateClient();
+        var owner = await RegisterAsync(ownerClient, "+79990000711");
+        var listener = await RegisterAsync(listenerClient, "+79990000712");
+        var outsider = await RegisterAsync(outsiderClient, "+79990000713");
+        Authorize(ownerClient, owner);
+        Authorize(listenerClient, listener);
+        Authorize(outsiderClient, outsider);
+        factory.Services.GetRequiredService<MusicAdminOptions>().UserIds.Add(owner.UserId);
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
+        var cover = await UploadAsync(ownerClient, "cover.png", "image/png", png);
+        var replacement = await UploadAsync(ownerClient, "next.png", "image/png", png);
+        var privateImage = await UploadAsync(ownerClient, "private.png", "image/png", png);
+        var audio = await UploadAsync(ownerClient, "song.mp3", "audio/mpeg", [0x49, 0x44, 0x33, 4, 0, 0, 1]);
+        var track = await PostAsync<MusicTrackResponse>(ownerClient, "/api/music/tracks",
+            new CreateTrackRequest(audio.Id, "Обложка", "Автор", 1000, cover.Id));
+        Assert.Equal(owner.UserId, track.UploaderUserId);
+        Assert.Equal(cover.Id, track.CoverObjectId);
+        Assert.NotNull(await listenerClient.GetFromJsonAsync<DownloadAuthorizationResponse>($"/api/objects/{cover.Id}/download"));
+        Assert.Equal(HttpStatusCode.NotFound, (await listenerClient.GetAsync($"/api/objects/{privateImage.Id}/download")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await listenerClient.PutAsJsonAsync($"/api/music/tracks/{track.Id}/cover",
+            new UpdateTrackCoverRequest(replacement.Id))).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await ownerClient.PutAsJsonAsync($"/api/music/tracks/{track.Id}/cover",
+            new UpdateTrackCoverRequest(audio.Id))).StatusCode);
+
+        var chat = await PostAsync<ChatResponse>(ownerClient, "/api/chats/direct", new CreateDirectChatRequest(listener.UserId));
+        var request = new SendMessageRequest(Guid.NewGuid(), "music", null, MusicTrackId: track.Id);
+        var sent = await PostAsync<MessageResponse>(ownerClient, $"/api/chats/{chat.Id}/messages", request);
+        var retry = await PostAsync<MessageResponse>(ownerClient, $"/api/chats/{chat.Id}/messages", request);
+        Assert.Equal(sent.Id, retry.Id);
+        Assert.Equal(cover.Id, sent.MusicTrack!.CoverObjectId);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsiderClient.PostAsJsonAsync($"/api/chats/{chat.Id}/messages", request)).StatusCode);
+        await SuccessAsync(ownerClient.PutAsJsonAsync($"/api/music/tracks/{track.Id}/cover", new UpdateTrackCoverRequest(replacement.Id)));
+        var history = await listenerClient.GetFromJsonAsync<MessagePageResponse>($"/api/chats/{chat.Id}/messages");
+        Assert.Equal(replacement.Id, Assert.Single(history!.Items).MusicTrack!.CoverObjectId);
+        Assert.NotNull(await listenerClient.GetFromJsonAsync<DownloadAuthorizationResponse>($"/api/objects/{replacement.Id}/download"));
+        Assert.NotNull(await listenerClient.GetFromJsonAsync<DownloadAuthorizationResponse>($"/api/music/tracks/{track.Id}/stream"));
+        await PostAsync<MessageResponse>(listenerClient, $"/api/chats/{chat.Id}/messages", request with { ClientMessageId = Guid.NewGuid() });
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MessengerDbContext>();
+            Assert.Equal(2, await db.Messages.CountAsync(message => message.ChatId == chat.Id && message.MusicTrackId == track.Id));
+        }
+        await SuccessAsync(ownerClient.PutAsJsonAsync($"/api/admin/music/tracks/{track.Id}", new ModerateTrackRequest("block", "Недоступно")));
+        Assert.Equal(HttpStatusCode.NotFound, (await listenerClient.PostAsJsonAsync($"/api/chats/{chat.Id}/messages",
+            request with { ClientMessageId = Guid.NewGuid() })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await listenerClient.GetAsync($"/api/objects/{replacement.Id}/download")).StatusCode);
+        history = await listenerClient.GetFromJsonAsync<MessagePageResponse>($"/api/chats/{chat.Id}/messages");
+        Assert.All(history!.Items, message => Assert.Null(message.MusicTrack));
+    }
+
+    private static async Task<StoredObjectResponse> UploadAsync(HttpClient client, string name, string mime, byte[] bytes)
+    {
+        var upload = await PostAsync<UploadSessionResponse>(client, "/api/uploads/", new CreateUploadRequest(
+            name, mime, bytes.Length, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()));
+        using var transfer = new HttpClient();
+        using var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue(mime);
+        using var response = await transfer.PutAsync(upload.UploadUrl, content);
+        response.EnsureSuccessStatusCode();
+        return await PostAsync<StoredObjectResponse>(client, $"/api/uploads/{upload.Id}/complete", new { });
     }
 
     private static async Task SuccessAsync(Task<HttpResponseMessage> request)

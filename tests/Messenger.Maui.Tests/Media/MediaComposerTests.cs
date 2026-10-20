@@ -1,6 +1,9 @@
 using Messenger.Contracts.Media;
 using Messenger.Maui.Features.Chats;
 using Messenger.Maui.Services;
+using System.Net;
+using System.Net.Http.Json;
+using Messenger.Contracts.Messages;
 
 namespace Messenger.Maui.Tests.Media;
 
@@ -78,6 +81,73 @@ public sealed class MediaComposerTests
 
         Assert.Equal(1, avatars.ProfileCalls);
         Assert.Equal(1, avatars.GroupCalls);
+    }
+
+    [Theory]
+    [InlineData(MediaKind.Photo, "image")]
+    [InlineData(MediaKind.Video, "video")]
+    public async Task Gallery_batch_keeps_order_and_uses_the_API_media_type(MediaKind firstKind, string expectedType)
+    {
+        var media = new MediaComposerViewModel(new FakeCapture(), new FakeUploader(), new FakeAvatarClient());
+        await media.AddSelectionsAsync([Selection(firstKind, "first", firstKind == MediaKind.Video ? "video/mp4" : "image/jpeg"), Selection(MediaKind.Photo, "second.jpg", "image/jpeg")]);
+        var objectIds = media.Attachments.Select(item => item.StoredObject!.Id).ToArray();
+        using var handler = new RecordingSendHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://example.test/") };
+        var chat = new ChatViewModel(Guid.NewGuid(), new ConversationClient(http), media) { ComposerText = "Подпись" };
+
+        await chat.SendAsync();
+
+        Assert.Equal(expectedType, handler.Sent!.Type);
+        Assert.Equal(objectIds, handler.Sent.AttachmentObjectIds);
+        Assert.Equal("Подпись", handler.Sent.Body);
+        Assert.Empty(media.Attachments);
+        Assert.Single(chat.Messages);
+    }
+
+    [Fact]
+    public async Task Failed_uploads_are_preserved_until_retry_and_cannot_be_silently_sent_as_a_partial_batch()
+    {
+        var uploader = new FakeUploader { Failure = new HttpRequestException("offline") };
+        var media = new MediaComposerViewModel(new FakeCapture(), uploader, new FakeAvatarClient());
+        await media.AddSelectionsAsync([Selection(MediaKind.Photo, "image.jpg", "image/jpeg")]);
+        using var handler = new RecordingSendHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://example.test/") };
+        var chat = new ChatViewModel(Guid.NewGuid(), new ConversationClient(http), media) { ComposerText = "Не потерять" };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => chat.SendAsync());
+        Assert.Null(handler.Sent);
+        Assert.Single(media.Attachments);
+        Assert.Equal("Не потерять", chat.ComposerText);
+
+        uploader.Failure = null;
+        await media.RetryAsync(media.Attachments[0]);
+        await chat.SendAsync();
+        Assert.NotNull(handler.Sent);
+        Assert.Empty(media.Attachments);
+    }
+
+    [Fact]
+    public async Task Over_limit_batch_is_rejected_before_starting_any_uploads()
+    {
+        var uploader = new FakeUploader();
+        var media = new MediaComposerViewModel(new FakeCapture(), uploader, new FakeAvatarClient());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => media.AddSelectionsAsync(
+            Enumerable.Range(0, 11).Select(index => Selection(MediaKind.Photo, $"{index}.jpg", "image/jpeg")).ToArray()));
+        Assert.Equal(0, uploader.Calls);
+        Assert.Empty(media.Attachments);
+    }
+
+    private sealed class RecordingSendHandler : HttpMessageHandler
+    {
+        public SendMessageRequest? Sent { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Sent = await request.Content!.ReadFromJsonAsync<SendMessageRequest>(ct);
+            return new(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new MessageResponse(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, Sent!.ClientMessageId,
+                    Sent.Type, Sent.Body, false, DateTimeOffset.UtcNow, null, null))
+            };
+        }
     }
 
     private static MediaSelection Selection(MediaKind kind, string name, string mime, long? duration = null) =>

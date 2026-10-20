@@ -3,6 +3,9 @@ using Messenger.Maui.Services;
 using System.ComponentModel;
 using Messenger.Contracts.Messages;
 using Messenger.Contracts.Realtime;
+using Messenger.Contracts.Music;
+using Messenger.Maui.Features.Music;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Messenger.Maui.Features.Chats;
 
@@ -15,6 +18,7 @@ public partial class ChatPage : ContentPage
     private bool _isActive, _windowActive;
     private int _lastVisibleIndex = -1;
     private Window? _window;
+    public MusicViewModel? Music { get; private set; }
 
     public Guid CurrentUserId { get; }
     public long ReadSequence => _viewModel?.ReadSequence ?? 0;
@@ -52,6 +56,9 @@ public partial class ChatPage : ContentPage
         base.OnAppearing();
         if (_isActive) return;
         _isActive = _windowActive = true;
+        Music = (Shell.Current as AppShell)?.Music;
+        if (Music is not null) Music.TrackUpdated += _viewModel.ApplyMusicTrack;
+        OnPropertyChanged(nameof(Music));
         _window = Window;
         if (_window is not null)
         {
@@ -75,6 +82,7 @@ public partial class ChatPage : ContentPage
     protected override void OnDisappearing()
     {
         _isActive = _windowActive = false;
+        if (Music is not null) Music.TrackUpdated -= _viewModel.ApplyMusicTrack;
         _lastVisibleIndex = -1;
         if (_window is not null)
         {
@@ -160,10 +168,39 @@ public partial class ChatPage : ContentPage
     }
     private async void OnAttachClicked(object? sender, EventArgs e)
     {
-        var action = await DisplayActionSheetAsync("Прикрепить", "Отмена", null, "Файл", "Фото", "Видео", "Аудио");
+        var action = await DisplayActionSheetAsync("Прикрепить", "Отмена", null, "Музыка", "Файл", "Фото", "Видео", "Аудио");
+        if (action == "Музыка")
+        {
+            var api = Handler!.MauiContext!.Services.GetRequiredService<IMusicApi>();
+            var clientIds = new Dictionary<Guid, Guid>();
+            await Navigation.PushAsync(new MusicPickerPage(api, async track =>
+            {
+                if (!clientIds.TryGetValue(track.Id, out var clientId)) clientIds[track.Id] = clientId = Guid.NewGuid();
+                _viewModel.Receive(await api.ShareAsync(track.Id, _viewModel.ChatId, clientId, CancellationToken.None));
+            }));
+            return;
+        }
         var kind = action switch { "Файл" => MediaKind.File, "Фото" => MediaKind.Photo, "Видео" => MediaKind.Video, "Аудио" => MediaKind.Audio, _ => (MediaKind?)null };
         if (kind.HasValue) await RunMediaAsync(kind.Value);
     }
+
+    private async void OnMusicTrackOpened(object? sender, MusicTrackResponse track) => await RunAsync(async ct =>
+    {
+        if (Music is null) return;
+        if (Music.CurrentTrack?.Id != track.Id) await PlayChatTrackAsync(track, ct);
+        await MusicPlayerPage.OpenAsync(Navigation, Music);
+    });
+
+    private async void OnMusicPlaybackRequested(object? sender, MusicTrackResponse track) => await RunAsync(async ct =>
+    {
+        if (Music is null) return;
+        if (Music.CurrentTrack?.Id != track.Id) await PlayChatTrackAsync(track, ct);
+        else if (Music.HasPlaybackError) await Music.RetryAsync(ct);
+        else Music.TogglePause();
+    });
+
+    private Task PlayChatTrackAsync(MusicTrackResponse track, CancellationToken ct) => Music!.PlayFromQueueAsync(track,
+        _viewModel.Messages.Select(message => message.MusicTrack).OfType<MusicTrackResponse>(), $"Чат: {ChatTitle.Text}", ct);
     private void OnComposerChanged(object? sender, TextChangedEventArgs e) => UpdateComposer();
     private void UpdateComposer()
     {

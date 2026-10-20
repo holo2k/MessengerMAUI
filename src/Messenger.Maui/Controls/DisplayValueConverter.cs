@@ -13,8 +13,7 @@ public sealed class DisplayValueConverter : IValueConverter, IMultiValueConverte
         var current = values.Length >= 2 && values[0] is Guid trackId && values[1] is Guid currentId && trackId == currentId;
         return (parameter as string) switch
         {
-            "libraryCurrent" => current ? Color.FromArgb("#E8F0E9") : Colors.Transparent,
-            "queueCurrent" => current ? Color.FromArgb("#2C4433") : Colors.Transparent,
+            "libraryCurrent" or "queueCurrent" => current ? Color.FromArgb("#D7EAFF") : Colors.Transparent,
             _ => current
         };
     }

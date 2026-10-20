@@ -5,6 +5,7 @@ using Messenger.Domain.Chats;
 using Messenger.Api.Hubs;
 using Messenger.Contracts.Realtime;
 using Messenger.Application.Media;
+using Messenger.Contracts.Music;
 
 namespace Messenger.Api.Endpoints;
 
@@ -38,8 +39,13 @@ public static class MessageEndpoints
             IUploadService attachments,
             CancellationToken ct) =>
         {
-            var sent = await service.SendAsync(
-                UserId(principal), chatId, request.ClientMessageId, ParseKind(request.Type), request.Body, ct);
+            var kind = ParseKind(request.Type);
+            if (kind == MessageKind.Music && (request.MusicTrackId is null || request.AttachmentObjectIds is { Count: > 0 }) ||
+                kind != MessageKind.Music && request.MusicTrackId is not null)
+                throw new FormatException("Invalid music message.");
+            var sent = kind == MessageKind.Music
+                ? await service.SendMusicAsync(UserId(principal), chatId, request.ClientMessageId, request.MusicTrackId!.Value, ct)
+                : await service.SendAsync(UserId(principal), chatId, request.ClientMessageId, kind, request.Body, ct);
             if (request.AttachmentObjectIds is { Count: > 0 })
             {
                 await attachments.AttachToMessageAsync(
@@ -117,7 +123,9 @@ public static class MessageEndpoints
         view.IsPinned,
         view.Message.CreatedAt,
         view.Message.EditedAt,
-        view.Message.DeletedAt);
+        view.Message.DeletedAt,
+        view.MusicTrack is { } track ? new MusicTrackResponse(track.Id, track.Title, track.Artist,
+            track.DurationMs, track.CoverObjectId, track.Status.ToString().ToLowerInvariant(), track.UploaderUserId) : null);
 
     private static long ParseCursor(string? cursor) => string.IsNullOrWhiteSpace(cursor)
         ? 0
@@ -132,6 +140,7 @@ public static class MessageEndpoints
         "video" => MessageKind.Video,
         "audio" => MessageKind.Audio,
         "file" => MessageKind.File,
+        "music" => MessageKind.Music,
         _ => throw new FormatException("Unknown message type.")
     };
 

@@ -92,6 +92,8 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api, MediaCompos
 
     public async Task SendAsync(CancellationToken cancellationToken = default)
     {
+        if (Media?.Attachments.Any(item => item.State != UploadItemState.Uploaded) == true)
+            throw new InvalidOperationException("Дождитесь загрузки вложений или повторите загрузку неудавшихся файлов.");
         var body = ComposerText;
         var uploaded = Media?.Attachments
             .Where(item => item.State == UploadItemState.Uploaded && item.StoredObject is not null)
@@ -105,7 +107,7 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api, MediaCompos
             : await api.SendWithAttachmentsAsync(
                 chatId,
                 Guid.NewGuid(),
-                uploaded[0].Selection.Kind.ToString().ToLowerInvariant(),
+                uploaded[0].Selection.Kind == MediaKind.Photo ? "image" : uploaded[0].Selection.Kind.ToString().ToLowerInvariant(),
                 string.IsNullOrWhiteSpace(body) ? null : body,
                 uploaded.Select(item => item.StoredObject!.Id).ToArray(),
                 cancellationToken);

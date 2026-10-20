@@ -17,6 +17,13 @@ public static class MusicEndpoints
         music.MapGet("/search", async (string? query, ClaimsPrincipal p, IMusicService s, CancellationToken ct) => Results.Ok((await s.SearchAsync(UserId(p), query ?? "", ct)).Select(ToResponse))).Document("SearchMusic", "Найти музыку", "Ищет доступные треки по названию и исполнителю.", "Музыка");
         music.MapGet("/library", async (ClaimsPrincipal p, IMusicService s, CancellationToken ct) => Results.Ok((await s.ListLibraryAsync(UserId(p), ct)).Select(ToResponse))).Document("ListMusicLibrary", "Открыть медиатеку", "Возвращает треки, добавленные текущим пользователем.", "Музыка");
         music.MapPost("/tracks", async (CreateTrackRequest r, ClaimsPrincipal p, IMusicService s, CancellationToken ct) => Results.Ok(ToResponse(await s.CreateAsync(UserId(p), r.AudioObjectId, r.Title, r.Artist, r.DurationMs, r.CoverObjectId, ct)))).Document("CreateMusicTrack", "Загрузить трек", "Регистрирует загруженный аудиофайл и метаданные нового трека.", "Музыка");
+        music.MapPut("/tracks/{id:guid}/cover", async (Guid id, UpdateTrackCoverRequest r, ClaimsPrincipal p,
+            IMusicService s, IHubContext<ChatHub> hub, CancellationToken ct) =>
+        {
+            var track = ToResponse(await s.UpdateCoverAsync(UserId(p), id, r.CoverObjectId, ct));
+            await hub.Clients.All.SendAsync("MusicTrackUpdated", new MusicTrackUpdatedEvent(track), ct);
+            return Results.Ok(track);
+        }).Document("UpdateMusicCover", "Изменить обложку трека", "Назначает загруженное изображение обложкой своего трека и уведомляет клиентов.", "Музыка");
         music.MapPost("/tracks/{id:guid}/declaration", async (Guid id, RightsDeclarationRequest r, ClaimsPrincipal p, IMusicService s, CancellationToken ct) => { await s.DeclareRightsAsync(UserId(p), id, r.Statement, ct); return Results.NoContent(); }).Document("DeclareMusicRights", "Подтвердить права на трек", "Сохраняет заявление загрузившего пользователя о наличии прав на публикацию.", "Музыка");
         music.MapPut("/library/{id:guid}", async (Guid id, ClaimsPrincipal p, IMusicService s, CancellationToken ct) => { await s.AddToLibraryAsync(UserId(p), id, ct); return Results.NoContent(); }).Document("AddMusicToLibrary", "Добавить трек в медиатеку", "Добавляет доступный трек в личную медиатеку.", "Музыка");
         music.MapDelete("/library/{id:guid}", async (Guid id, ClaimsPrincipal p, IMusicService s, CancellationToken ct) => { await s.RemoveFromLibraryAsync(UserId(p), id, ct); return Results.NoContent(); }).Document("RemoveMusicFromLibrary", "Удалить трек из медиатеки", "Убирает трек из личной медиатеки без удаления общего трека.", "Музыка");
@@ -32,6 +39,6 @@ public static class MusicEndpoints
         }).RequireAuthorization().Document("ModerateMusicTrack", "Провести модерацию трека", "Административная модерация трека. Поле action: approve — одобрить и опубликовать, block — заблокировать, delete — удалить. Поле reason: понятная текстовая причина решения для журнала аудита. Готовые варианты тела запроса доступны в списке Examples.", "Администрирование музыки");
         return endpoints;
     }
-    private static MusicTrackResponse ToResponse(MusicTrack x) => new(x.Id, x.Title, x.Artist, x.DurationMs, x.CoverObjectId, x.Status.ToString().ToLowerInvariant());
+    private static MusicTrackResponse ToResponse(MusicTrack x) => new(x.Id, x.Title, x.Artist, x.DurationMs, x.CoverObjectId, x.Status.ToString().ToLowerInvariant(), x.UploaderUserId);
     private static Guid UserId(ClaimsPrincipal p) => Guid.Parse(p.FindFirstValue(ClaimTypes.NameIdentifier) ?? p.FindFirstValue("sub") ?? throw new UnauthorizedAccessException());
 }

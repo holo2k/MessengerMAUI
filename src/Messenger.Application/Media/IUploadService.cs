@@ -58,5 +58,6 @@ public interface IUploadService
     Task AttachToMessageAsync(Guid actorId, Guid messageId, IReadOnlyList<Guid> objectIds, CancellationToken ct = default);
     Task<IReadOnlyList<StoredObject>> ListChatMediaAsync(Guid actorId, Guid chatId, CancellationToken ct = default);
     Task ValidateOwnedAvailableAsync(Guid actorId, Guid objectId, CancellationToken ct = default);
+    Task ValidateOwnedImageAsync(Guid actorId, Guid objectId, CancellationToken ct = default);
     Task CleanupExpiredAsync(CancellationToken ct = default);
 }

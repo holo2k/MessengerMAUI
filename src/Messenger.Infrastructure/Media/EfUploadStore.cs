@@ -1,6 +1,7 @@
 using Messenger.Application.Media;
 using Messenger.Domain.Media;
 using Messenger.Domain.Users;
+using Messenger.Domain.Music;
 using Messenger.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +18,9 @@ public sealed class EfUploadStore(MessengerDbContext db) : IUploadStore
 
     public async Task<bool> CanAccessObjectAsync(Guid userId, Guid objectId, CancellationToken ct)
     {
+        if (await db.MusicTracks.AnyAsync(track => track.CoverObjectId == objectId &&
+                track.Status == MusicTrackStatus.Available, ct)) return true;
+
         if (await (from attachment in db.MessageAttachments
             join message in db.Messages on attachment.MessageId equals message.Id
             join member in db.ChatMembers on message.ChatId equals member.ChatId

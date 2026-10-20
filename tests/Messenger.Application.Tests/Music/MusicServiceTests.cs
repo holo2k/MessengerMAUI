@@ -50,6 +50,23 @@ public sealed class MusicServiceTests
         Assert.Single(fixture.Store.Claims);
     }
 
+    [Fact]
+    public async Task Only_uploader_can_replace_the_cover_with_an_owned_image()
+    {
+        var fixture = Fixture();
+        var firstCover = Guid.NewGuid();
+        var nextCover = Guid.NewGuid();
+        fixture.Uploads.Images.UnionWith([firstCover, nextCover]);
+        var track = await fixture.Service.CreateAsync(fixture.User, Guid.NewGuid(), "Песня", "Автор", 1000, firstCover);
+        Assert.Equal(firstCover, track.CoverObjectId);
+        var updated = await fixture.Service.UpdateCoverAsync(fixture.User, track.Id, nextCover);
+        Assert.Equal(nextCover, updated.CoverObjectId);
+        Assert.Equal(MusicRuleError.Forbidden, (await Assert.ThrowsAsync<MusicRuleException>(() =>
+            fixture.Service.UpdateCoverAsync(Guid.NewGuid(), track.Id, firstCover))).Code);
+        await Assert.ThrowsAsync<MediaException>(() => fixture.Service.UpdateCoverAsync(fixture.User, track.Id, Guid.NewGuid()));
+        Assert.Equal(nextCover, track.CoverObjectId);
+    }
+
     private static TestFixture Fixture()
     {
         var user = Guid.NewGuid();
@@ -66,6 +83,9 @@ public sealed class MusicServiceTests
 
     private sealed class FakeUploads(Guid owner) : IUploadService
     {
+        public HashSet<Guid> Images { get; } = [];
+        public Task ValidateOwnedImageAsync(Guid actorId, Guid objectId, CancellationToken ct = default) =>
+            actorId == owner && Images.Contains(objectId) ? Task.CompletedTask : Task.FromException(new MediaException(MediaError.FileTypeMismatch));
         public int AuthorizationCalls { get; private set; }
         public Task ValidateOwnedAvailableAsync(Guid actorId, Guid objectId, CancellationToken ct = default) =>
             actorId == owner ? Task.CompletedTask : Task.FromException(new MediaException(MediaError.NotFound));
@@ -78,22 +98,4 @@ public sealed class MusicServiceTests
         public Task CleanupExpiredAsync(CancellationToken ct = default) => throw new NotSupportedException();
     }
 
-    private sealed class MemoryMusicStore : IMusicStore
-    {
-        public List<MusicTrack> Tracks { get; } = [];
-        public List<UserMusicTrack> Library { get; } = [];
-        public List<CopyrightClaim> Claims { get; } = [];
-        public List<ModerationAction> Actions { get; } = [];
-        public Task AddTrackAsync(MusicTrack track, CancellationToken ct) { Tracks.Add(track); return Task.CompletedTask; }
-        public Task AddDeclarationAsync(RightsDeclaration declaration, CancellationToken ct) => Task.CompletedTask;
-        public Task<MusicTrack?> FindTrackAsync(Guid id, CancellationToken ct) => Task.FromResult(Tracks.SingleOrDefault(x => x.Id == id));
-        public Task<IReadOnlyList<MusicTrack>> SearchAsync(string query, int take, CancellationToken ct) => Task.FromResult<IReadOnlyList<MusicTrack>>(Tracks.Where(x => x.Status == MusicTrackStatus.Available && (x.Title + x.Artist).Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray());
-        public Task<IReadOnlyList<MusicTrack>> ListLibraryAsync(Guid userId, CancellationToken ct) => Task.FromResult<IReadOnlyList<MusicTrack>>((from item in Library join track in Tracks on item.TrackId equals track.Id where item.UserId == userId && track.Status == MusicTrackStatus.Available select track).ToArray());
-        public Task<bool> LibraryContainsAsync(Guid userId, Guid trackId, CancellationToken ct) => Task.FromResult(Library.Any(x => x.UserId == userId && x.TrackId == trackId));
-        public Task AddLibraryAsync(UserMusicTrack item, CancellationToken ct) { Library.Add(item); return Task.CompletedTask; }
-        public Task RemoveLibraryAsync(Guid userId, Guid trackId, CancellationToken ct) { Library.RemoveAll(x => x.UserId == userId && x.TrackId == trackId); return Task.CompletedTask; }
-        public Task AddClaimAsync(CopyrightClaim claim, CancellationToken ct) { Claims.Add(claim); return Task.CompletedTask; }
-        public Task AddActionAsync(ModerationAction action, CancellationToken ct) { Actions.Add(action); return Task.CompletedTask; }
-        public Task SaveChangesAsync(CancellationToken ct) => Task.CompletedTask;
-    }
 }

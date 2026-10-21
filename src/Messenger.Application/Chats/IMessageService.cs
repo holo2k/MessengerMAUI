@@ -1,12 +1,16 @@
 using Messenger.Domain.Chats;
 using Messenger.Domain.Music;
+using Messenger.Domain.Media;
 
 namespace Messenger.Application.Chats;
 
-public sealed record MessageView(Message Message, string? Body, bool IsPinned, MusicTrack? MusicTrack = null);
+public sealed record MessageView(Message Message, string? Body, bool IsPinned, MusicTrack? MusicTrack = null,
+    IReadOnlyList<StoredObject>? Attachments = null);
 
 public interface IMessageStore
 {
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<StoredObject>>> ListAttachmentsAsync(
+        IReadOnlyCollection<Guid> messageIds, CancellationToken cancellationToken);
     Task<Message?> FindByClientIdAsync(Guid senderId, Guid clientMessageId, CancellationToken cancellationToken);
     Task<Message?> FindMessageAsync(Guid messageId, CancellationToken cancellationToken);
     Task<IReadOnlyList<Message>> ListMessagesAsync(
@@ -38,6 +42,7 @@ public interface IMessageStore
 
 public interface IMessageService
 {
+    Task<MessageView> GetAsync(Guid requesterUserId, Guid messageId, CancellationToken cancellationToken = default);
     Task<MessageView> SendMusicAsync(Guid senderUserId, Guid chatId, Guid clientMessageId, Guid trackId,
         CancellationToken cancellationToken = default);
     Task<MessageView> SendAsync(

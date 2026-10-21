@@ -45,8 +45,11 @@ public partial class ChatsPage : ContentPage
         var session = await _services.GetRequiredService<ISecureSessionStore>().GetAsync();
         _viewModel.SetCurrentUser(session?.Session.UserId ?? Guid.Empty);
         AttachListSync();
-        await SafeRunAsync(_listSync.StartAsync, suppressUnauthorized: true);
-        await SafeRunAsync(_viewModel.LoadAsync, suppressUnauthorized: true);
+        await ChatsLoading.LoadAsync(async () =>
+        {
+            await SafeRunAsync(_listSync.StartAsync, suppressUnauthorized: true);
+            await SafeRunAsync(_viewModel.LoadAsync, suppressUnauthorized: true);
+        });
     }
 
     protected override void OnDisappearing()

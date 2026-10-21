@@ -9,7 +9,8 @@
             <Label Grid.Column="1" Text="Настройки" Style="{StaticResource NavigationTitle}" />
             <Button x:Name="EditProfileButton" Grid.Column="2" Text="Ред." Clicked="OnEditProfileClicked" />
         </Grid>
-        <ScrollView Grid.Row="1">
+        <ui:LoadingHost x:Name="SettingsLoading" Grid.Row="1" Kind="Settings">
+        <ScrollView>
             <VerticalStackLayout Spacing="0" Padding="0,0,0,20">
                 <VerticalStackLayout BackgroundColor="White" Spacing="0" Padding="16,0">
                     <Grid ColumnDefinitions="64,*" Padding="0,22" ColumnSpacing="16">
@@ -129,5 +130,6 @@
                        IsVisible="{Binding Status, Converter={StaticResource DisplayValue}, ConverterParameter=notEmpty}" />
             </VerticalStackLayout>
         </ScrollView>
+        </ui:LoadingHost>
     </Grid>
 </ContentPage>

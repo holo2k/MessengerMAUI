@@ -35,6 +35,8 @@ public sealed class MediaComposerTests
         var viewModel = new MediaComposerViewModel(capture, uploader, new FakeAvatarClient());
 
         await viewModel.AddFileAsync();
+        Assert.Contains("report.pdf: offline", viewModel.Status);
+        Assert.Equal("offline", viewModel.Attachments.Single().ErrorMessage);
         uploader.Failure = null;
         await viewModel.RetryAsync(viewModel.Attachments.Single());
 
@@ -43,6 +45,8 @@ public sealed class MediaComposerTests
         Assert.Equal(1, item.Progress);
         Assert.Equal(2, uploader.Calls);
         Assert.Same(selection, uploader.LastSelection);
+        Assert.Null(item.ErrorMessage);
+        Assert.Null(viewModel.Status);
     }
 
     [Theory]
@@ -102,6 +106,7 @@ public sealed class MediaComposerTests
         Assert.Equal("Подпись", handler.Sent.Body);
         Assert.Empty(media.Attachments);
         Assert.Single(chat.Messages);
+        Assert.Equal(objectIds, chat.Messages.Single().Attachments!.Select(value => value.Id));
     }
 
     [Fact]
@@ -134,6 +139,23 @@ public sealed class MediaComposerTests
             Enumerable.Range(0, 11).Select(index => Selection(MediaKind.Photo, $"{index}.jpg", "image/jpeg")).ToArray()));
         Assert.Equal(0, uploader.Calls);
         Assert.Empty(media.Attachments);
+    }
+
+    [Fact]
+    public async Task A_later_success_does_not_hide_an_earlier_failed_attachment_reason()
+    {
+        var uploader = new FakeUploader { Failure = new HttpRequestException("Сервер отклонил формат файла.") };
+        var media = new MediaComposerViewModel(new FakeCapture(), uploader, new FakeAvatarClient());
+        await media.AddSelectionsAsync([Selection(MediaKind.Photo, "first.jpg", "image/jpeg")]);
+        uploader.Failure = null;
+        await media.AddSelectionsAsync([Selection(MediaKind.Photo, "second.jpg", "image/jpeg")]);
+
+        Assert.Equal(UploadItemState.Failed, media.Attachments[0].State);
+        Assert.Equal(UploadItemState.Uploaded, media.Attachments[1].State);
+        Assert.Contains("first.jpg: Сервер отклонил формат файла.", media.Status);
+        Assert.DoesNotContain("second.jpg", media.Status);
+        await media.RetryAsync(media.Attachments[0]);
+        Assert.Null(media.Status);
     }
 
     private sealed class RecordingSendHandler : HttpMessageHandler

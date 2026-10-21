@@ -6,6 +6,24 @@ namespace Messenger.Maui.Tests.Media;
 public sealed class AttachmentPickerTests
 {
     [Fact]
+    public async Task Gallery_cells_keep_explicit_square_dimensions_on_initial_load_paging_and_resize()
+    {
+        var gallery = new FakeGallery();
+        gallery.Pages.Enqueue(new([Item("first")], "next"));
+        gallery.Pages.Enqueue(new([Item("second")], null));
+        var viewModel = new AttachmentPickerViewModel(gallery, 10);
+        viewModel.UpdateGalleryWidth(394);
+        await viewModel.OpenAsync();
+        Assert.Equal(130, Assert.Single(viewModel.Items).TileSize);
+        viewModel.UpdateGalleryWidth(304);
+        await viewModel.LoadMoreAsync();
+        Assert.All(viewModel.Items, item => Assert.Equal(100, item.TileSize));
+        viewModel.UpdateGalleryWidth(-1);
+        viewModel.UpdateGalleryWidth(double.NaN);
+        Assert.All(viewModel.Items, item => Assert.Equal(100, item.TileSize));
+    }
+
+    [Fact]
     public async Task Permission_denial_never_queries_or_opens_gallery_files()
     {
         var gallery = new FakeGallery { Access = GalleryAccess.Denied };

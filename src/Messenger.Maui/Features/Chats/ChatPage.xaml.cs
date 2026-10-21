@@ -84,7 +84,7 @@ public partial class ChatPage : ContentPage
         _sync.ReadPositionChanged += OnReadPositionChangedAsync;
         _sync.ReadPositionsLoaded += OnReadPositionsLoadedAsync;
         _sync.ConnectionStateChanged += OnConnectionStateChanged;
-        await RunAsync(_viewModel.LoadAsync);
+        await MessagesLoading.LoadAsync(() => RunAsync(_viewModel.LoadAsync));
         if (!_isActive) return;
         await RunAsync(ct => _sync.StartAsync(_viewModel.ChatId, ct));
         if (!_isActive) { _sync.Stop(); return; }
@@ -296,21 +296,30 @@ public partial class ChatPage : ContentPage
     }
     private async void OnSearchClicked(object? sender, EventArgs e)
     {
-        await RunAsync(ct => _viewModel.SearchAsync(SearchEntry.Text ?? string.Empty, ct));
-        EmptyMessageLabel.Text = "Сообщения не найдены";
-        MessagesList.ItemsSource = _viewModel.SearchResults;
+        await MessagesLoading.LoadAsync(async () =>
+        {
+            await RunAsync(ct => _viewModel.SearchAsync(SearchEntry.Text ?? string.Empty, ct));
+            EmptyMessageLabel.Text = "Сообщения не найдены";
+            MessagesList.ItemsSource = _viewModel.SearchResults;
+        }, replaceContent: true);
     }
     private async void OnPinsClicked(object? sender, EventArgs e)
     {
-        await RunAsync(_viewModel.LoadPinsAsync);
-        EmptyMessageLabel.Text = "Нет закреплённых сообщений";
-        MessagesList.ItemsSource = _viewModel.Pins;
-        SearchPanel.IsVisible = true;
+        await MessagesLoading.LoadAsync(async () =>
+        {
+            await RunAsync(_viewModel.LoadPinsAsync);
+            EmptyMessageLabel.Text = "Нет закреплённых сообщений";
+            MessagesList.ItemsSource = _viewModel.Pins;
+            SearchPanel.IsVisible = true;
+        }, replaceContent: true);
     }
     private async void OnMediaClicked(object? sender, EventArgs e)
     {
-        await RunAsync(_viewModel.LoadMediaAsync);
-        await Navigation.PushAsync(new SharedMediaPage(_viewModel.SharedMedia));
+        await Navigation.PushAsync(new SharedMediaPage(async () =>
+        {
+            await _viewModel.LoadMediaAsync();
+            return _viewModel.SharedMedia.ToArray();
+        }));
     }
     private async void OnFileClicked(object? sender, EventArgs e) => await RunMediaAsync(MediaKind.File);
     private async void OnPhotoClicked(object? sender, EventArgs e) => await RunMediaAsync(MediaKind.Photo);

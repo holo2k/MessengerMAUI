@@ -18,10 +18,13 @@ public partial class SettingsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await SafeAsync(_viewModel.LoadAsync);
-        PhonePrivacyPicker.SelectedIndex = Array.IndexOf(PrivacyValues, _viewModel.PhonePrivacy);
-        AvatarPrivacyPicker.SelectedIndex = Array.IndexOf(PrivacyValues, _viewModel.AvatarPrivacy);
-        LastSeenPrivacyPicker.SelectedIndex = Array.IndexOf(PrivacyValues, _viewModel.LastSeenPrivacy);
+        await SettingsLoading.LoadAsync(async () =>
+        {
+            await SafeAsync(_viewModel.LoadAsync);
+            PhonePrivacyPicker.SelectedIndex = Array.IndexOf(PrivacyValues, _viewModel.PhonePrivacy);
+            AvatarPrivacyPicker.SelectedIndex = Array.IndexOf(PrivacyValues, _viewModel.AvatarPrivacy);
+            LastSeenPrivacyPicker.SelectedIndex = Array.IndexOf(PrivacyValues, _viewModel.LastSeenPrivacy);
+        });
     }
     private async void OnEditProfileClicked(object? s, EventArgs e)
     {

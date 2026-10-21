@@ -74,6 +74,8 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IAvatarClient>(services => services.GetRequiredService<UploadClient>());
 		builder.Services.AddSingleton<IAvatarImageClient>(services => new AvatarImageClient(
 			services.GetRequiredService<HttpClient>(), new HttpClient()));
+		builder.Services.AddSingleton<IMessageAttachmentClient>(services => new MessageAttachmentClient(
+			services.GetRequiredService<HttpClient>(), new HttpClient()));
 		builder.Services.AddTransient<MediaComposerViewModel>();
 		builder.Services.AddSingleton<IMusicApi, MusicApiClient>();
 		builder.Services.AddSingleton<IAsyncDelay, AsyncDelay>();

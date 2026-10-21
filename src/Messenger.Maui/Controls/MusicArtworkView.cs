@@ -11,6 +11,7 @@ public sealed class MusicArtworkView : ContentView
     private readonly Border _artwork;
     private readonly Label _monogram;
     private readonly Image _image;
+    private readonly SkeletonView _skeleton = new() { Kind = SkeletonKind.Image, IsVisible = false };
     private int _loadVersion;
     public static readonly BindableProperty CornerRadiusProperty = BindableProperty.Create(nameof(CornerRadius), typeof(double), typeof(MusicArtworkView), 6d,
         propertyChanged: (view, _, value) => ((MusicArtworkView)view)._artwork.StrokeShape = new RoundRectangle { CornerRadius = (double)value });
@@ -25,6 +26,7 @@ public sealed class MusicArtworkView : ContentView
         composition.Add(_monogram);
         _image = new Image { Aspect = Aspect.AspectFill, IsVisible = false };
         composition.Add(_image);
+        composition.Add(_skeleton);
         _artwork = new Border { StrokeThickness = 0, StrokeShape = new RoundRectangle { CornerRadius = CornerRadius }, Content = composition };
         Content = _artwork;
         SizeChanged += (_, _) =>
@@ -50,17 +52,25 @@ public sealed class MusicArtworkView : ContentView
         var version = ++_loadVersion;
         _image.Source = null;
         _image.IsVisible = false;
-        _monogram.IsVisible = true;
+        var hasCover = Track?.CoverObjectId is not null;
+        _monogram.IsVisible = !hasCover;
+        _skeleton.IsVisible = hasCover;
         if (Track?.CoverObjectId is not { } coverId ||
             Handler?.MauiContext?.Services.GetService(typeof(IAvatarImageClient)) is not IAvatarImageClient images) return;
         try
         {
             var bytes = await images.GetAsync(coverId.ToString());
-            if (version != _loadVersion || bytes is null) return;
+            if (version != _loadVersion) return;
+            if (bytes is null) { _skeleton.IsVisible = false; _monogram.IsVisible = true; return; }
             _image.Source = ImageSource.FromStream(() => new MemoryStream(bytes));
             _image.IsVisible = true;
             _monogram.IsVisible = false;
+            _skeleton.IsVisible = false;
         }
-        catch (Exception exception) { System.Diagnostics.Debug.WriteLine($"Track cover: {exception.Message}"); }
+        catch (Exception exception)
+        {
+            if (version == _loadVersion) { _skeleton.IsVisible = false; _monogram.IsVisible = true; }
+            System.Diagnostics.Debug.WriteLine($"Track cover: {exception.Message}");
+        }
     }
 }

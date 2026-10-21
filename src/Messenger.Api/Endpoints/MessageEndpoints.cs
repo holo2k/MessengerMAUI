@@ -6,6 +6,7 @@ using Messenger.Api.Hubs;
 using Messenger.Contracts.Realtime;
 using Messenger.Application.Media;
 using Messenger.Contracts.Music;
+using Messenger.Contracts.Media;
 
 namespace Messenger.Api.Endpoints;
 
@@ -50,6 +51,7 @@ public static class MessageEndpoints
             {
                 await attachments.AttachToMessageAsync(
                     UserId(principal), sent.Message.Id, request.AttachmentObjectIds, ct);
+                sent = await service.GetAsync(UserId(principal), sent.Message.Id, ct);
             }
             await publisher.MessageCreatedAsync(
                 new MessageCreatedEvent(chatId, sent.Message.Id, sent.Message.Sequence), ct);
@@ -125,7 +127,9 @@ public static class MessageEndpoints
         view.Message.EditedAt,
         view.Message.DeletedAt,
         view.MusicTrack is { } track ? new MusicTrackResponse(track.Id, track.Title, track.Artist,
-            track.DurationMs, track.CoverObjectId, track.Status.ToString().ToLowerInvariant(), track.UploaderUserId) : null);
+            track.DurationMs, track.CoverObjectId, track.Status.ToString().ToLowerInvariant(), track.UploaderUserId) : null,
+        view.Attachments?.Select(value => new StoredObjectResponse(value.Id, value.FileName, value.ContentType,
+            value.Size, value.Sha256, value.CreatedAt)).ToArray() ?? []);
 
     private static long ParseCursor(string? cursor) => string.IsNullOrWhiteSpace(cursor)
         ? 0

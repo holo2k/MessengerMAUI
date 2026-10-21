@@ -12,16 +12,15 @@ public partial class AttachmentPickerView : ContentView
     public event Action? CloseRequested;
     public event Func<IReadOnlyList<MediaSelection>, Task>? AttachRequested;
     public event Func<AttachmentPickerAction, Task>? ActionRequested;
-    public double TileSize => Math.Max(1, (Width - 4) / 3);
 
     public AttachmentPickerView(IGalleryService gallery, int selectionLimit)
     {
         InitializeComponent();
         BindingContext = _viewModel = new(gallery, selectionLimit);
-        SizeChanged += (_, _) => OnPropertyChanged(nameof(TileSize));
     }
 
     public Task OpenAsync() => _viewModel.OpenAsync(ct: _lifetime.Token);
+    private void OnGallerySizeChanged(object? sender, EventArgs e) => _viewModel?.UpdateGalleryWidth(GalleryList.Width);
     public async Task RefreshOnResumeAsync()
     {
         if (!_refreshOnResume || _lifetime.IsCancellationRequested) return;

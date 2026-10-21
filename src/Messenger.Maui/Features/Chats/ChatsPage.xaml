@@ -13,7 +13,8 @@
         </Grid>
         <Label x:Name="LargeTitle" Grid.Row="1" Text="Чаты" FontSize="34" FontAttributes="Bold" Margin="16,4,16,12" IsVisible="False" />
         <ContentView x:Name="MiniPlayerHost" Grid.Row="2" IsVisible="False" />
-        <RefreshView x:Name="ChatRefresh" Grid.Row="3" Refreshing="OnRefreshClicked">
+        <ui:LoadingHost x:Name="ChatsLoading" Grid.Row="3" Kind="Chats">
+        <RefreshView x:Name="ChatRefresh" Refreshing="OnRefreshClicked">
             <CollectionView x:Name="ChatsList" ItemsSource="{Binding VisibleChats}" SelectionMode="Multiple" SelectionChanged="OnChatSelected">
                 <CollectionView.EmptyView>
                     <VerticalStackLayout Padding="32,70" Spacing="12">
@@ -54,6 +55,7 @@
                 </CollectionView.ItemTemplate>
             </CollectionView>
         </RefreshView>
+        </ui:LoadingHost>
         <Grid x:Name="BulkBar" Grid.Row="4" ColumnDefinitions="*,1.3*,*" Padding="4,6" BackgroundColor="{StaticResource BarBackground}" IsVisible="False">
             <Button x:Name="ArchiveButton" Text="Архивировать" FontSize="13" Clicked="OnArchiveClicked" IsEnabled="False" />
             <Button x:Name="ReadButton" Grid.Column="1" Text="Отметить&#10;прочитанными" FontSize="13" Clicked="OnReadClicked" IsEnabled="False" />

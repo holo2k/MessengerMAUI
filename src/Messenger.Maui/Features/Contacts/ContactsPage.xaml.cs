@@ -23,16 +23,20 @@ public partial class ContactsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await RunAsync(_viewModel.LoadAsync);
+        await ContactsLoading.LoadAsync(() => RunAsync(_viewModel.LoadAsync));
     }
 
     private async void OnSearchClicked(object? sender, EventArgs e)
     {
         var query = SearchEntry.Text?.Trim();
         if (string.IsNullOrEmpty(query)) { OnCancelSearchClicked(sender, e); return; }
-        await RunAsync(ct => _viewModel.SearchAsync(query, ct));
-        ResultsList.IsVisible = CancelSearchButton.IsVisible = true;
-        ContactsList.IsVisible = false;
+        await ContactsLoading.LoadAsync(async () =>
+        {
+            await RunAsync(ct => _viewModel.SearchAsync(query, ct));
+            if (SearchEntry.Text?.Trim() != query) return;
+            ResultsList.IsVisible = CancelSearchButton.IsVisible = true;
+            ContactsList.IsVisible = false;
+        }, replaceContent: true);
     }
 
     private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)

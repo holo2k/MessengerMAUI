@@ -34,7 +34,8 @@
             </VerticalStackLayout>
             <Label Grid.Row="1" Text="{Binding Status}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="24,0,24,8"
                    IsVisible="{Binding Status, Converter={StaticResource DisplayValue}, ConverterParameter=notEmpty}" />
-            <CollectionView x:Name="TracksList" Grid.Row="2" ItemsSource="{Binding Library}" SelectionMode="Single" SelectionChanged="OnTrackSelected">
+            <ui:LoadingHost x:Name="TracksLoading" Grid.Row="2" Kind="Music">
+            <CollectionView x:Name="TracksList" ItemsSource="{Binding Library}" SelectionMode="Single" SelectionChanged="OnTrackSelected">
                 <CollectionView.EmptyView>
                     <VerticalStackLayout Padding="36,50" Spacing="14">
                         <Image Source="icon_music.png" HeightRequest="48" WidthRequest="48" Opacity="0.5" />
@@ -60,6 +61,7 @@
                 </CollectionView.ItemTemplate>
                 <CollectionView.Footer><BoxView HeightRequest="12" Color="Transparent" /></CollectionView.Footer>
             </CollectionView>
+            </ui:LoadingHost>
         </Grid>
         <ContentView x:Name="MiniPlayerHost" Grid.Row="1" Margin="12,6" IsVisible="{Binding HasCurrentTrack}" />
     </Grid>

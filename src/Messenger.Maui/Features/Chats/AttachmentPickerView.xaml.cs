@@ -19,7 +19,7 @@ public partial class AttachmentPickerView : ContentView
         BindingContext = _viewModel = new(gallery, selectionLimit);
     }
 
-    public Task OpenAsync() => _viewModel.OpenAsync(ct: _lifetime.Token);
+    public Task OpenAsync() => GalleryLoading.LoadAsync(() => _viewModel.OpenAsync(ct: _lifetime.Token));
     private void OnGallerySizeChanged(object? sender, EventArgs e) => _viewModel?.UpdateGalleryWidth(GalleryList.Width);
     public async Task RefreshOnResumeAsync()
     {
@@ -35,7 +35,7 @@ public partial class AttachmentPickerView : ContentView
     private async void OnGalleryClicked(object? sender, EventArgs e)
     {
         _refreshOnResume = DeviceInfo.Platform == DevicePlatform.iOS;
-        await _viewModel.OpenAsync(reselect: true, ct: _lifetime.Token);
+        await GalleryLoading.LoadAsync(() => _viewModel.OpenAsync(reselect: true, ct: _lifetime.Token), replaceContent: true);
     }
     private async void OnGalleryTapped(object? sender, TappedEventArgs e)
     {

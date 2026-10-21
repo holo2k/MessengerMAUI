@@ -45,8 +45,8 @@ public partial class ChatsPage : ContentPage
         var session = await _services.GetRequiredService<ISecureSessionStore>().GetAsync();
         _viewModel.SetCurrentUser(session?.Session.UserId ?? Guid.Empty);
         AttachListSync();
-        await SafeRunAsync(_listSync.StartAsync);
-        await SafeRunAsync(_viewModel.LoadAsync);
+        await SafeRunAsync(_listSync.StartAsync, suppressUnauthorized: true);
+        await SafeRunAsync(_viewModel.LoadAsync, suppressUnauthorized: true);
     }
 
     protected override void OnDisappearing()
@@ -153,9 +153,13 @@ public partial class ChatsPage : ContentPage
         ChatsList.SelectedItems.Clear();
     }
 
-    private async Task SafeRunAsync(Func<CancellationToken, Task> action)
+    private async Task SafeRunAsync(Func<CancellationToken, Task> action, bool suppressUnauthorized = false)
     {
         try { await action(CancellationToken.None); }
+        catch (Exception exception) when (suppressUnauthorized && ExceptionDisplay.IsUnauthorized(exception))
+        {
+            System.Diagnostics.Debug.WriteLine("Startup authorization is handled by session recovery.");
+        }
         catch (Exception exception) { await DisplayAlertAsync("Ошибка", exception.Message, "OK"); }
     }
 }

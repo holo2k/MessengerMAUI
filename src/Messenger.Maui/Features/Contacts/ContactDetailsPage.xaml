@@ -10,7 +10,8 @@
             <Label x:Name="HeaderTitle" Grid.Column="1" Text="Информация" Style="{StaticResource NavigationTitle}" />
             <Button x:Name="EditButton" Grid.Column="2" Text="Ред." Clicked="OnEditClicked" IsVisible="{Binding CanEdit}" />
         </Grid>
-        <ScrollView Grid.Row="1">
+        <ui:LoadingHost x:Name="ProfileLoading" Grid.Row="1" Kind="Profile">
+        <ScrollView>
             <VerticalStackLayout Spacing="0">
                 <VerticalStackLayout x:Name="InfoPanel" Spacing="0">
                     <Grid BackgroundColor="White" Padding="24">
@@ -42,5 +43,6 @@
                 </Grid>
             </VerticalStackLayout>
         </ScrollView>
+        </ui:LoadingHost>
     </Grid>
 </ContentPage>

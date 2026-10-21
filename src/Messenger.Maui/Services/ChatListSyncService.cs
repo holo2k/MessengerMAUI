@@ -24,7 +24,17 @@ public sealed class ChatListSyncService(
         realtime.Reconnected += OnReconnectedAsync;
         try
         {
-            await realtime.ConnectAsync(cancellationToken);
+            try
+            {
+                await realtime.ConnectAsync(cancellationToken);
+            }
+            catch (Exception exception) when (ExceptionDisplay.IsUnauthorized(exception))
+            {
+                // SignalR reads the saved token directly; an API request uses AuthSessionHandler
+                // to refresh an expired token before we retry the initial connection once.
+                await api.GetChatsAsync(cancellationToken);
+                if (_started) await realtime.ConnectAsync(cancellationToken);
+            }
         }
         catch
         {

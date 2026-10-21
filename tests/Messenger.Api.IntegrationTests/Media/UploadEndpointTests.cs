@@ -68,9 +68,12 @@ public sealed class UploadEndpointTests : IAsyncLifetime
             "/api/me/privacy", new PrivacyRequest("contacts", "nobody", "contacts"))).StatusCode);
 
         var chat = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(recipient.UserId));
-        await PostAsync<MessageResponse>(client, $"/api/chats/{chat.Id}/messages",
+        var photoMessage = await PostAsync<MessageResponse>(client, $"/api/chats/{chat.Id}/messages",
             new SendMessageRequest(Guid.NewGuid(), "image", null, [stored.Id]));
+        Assert.Equal(stored, Assert.Single(photoMessage.Attachments!));
         Authorize(client, recipient);
+        var received = await client.GetFromJsonAsync<MessagePageResponse>($"/api/chats/{chat.Id}/messages");
+        Assert.Equal(stored, Assert.Single(Assert.Single(received!.Items).Attachments!));
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/objects/{stored.Id}/download")).StatusCode);
 
         Authorize(client, outsider);

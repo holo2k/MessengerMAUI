@@ -252,6 +252,7 @@ public partial class ChatPage : ContentPage
         if (e.Parameter is not ComposerAttachment { State: UploadItemState.Failed } item || _viewModel.Media is null) return;
         await RunAsync(ct => _viewModel.Media.RetryAsync(item, ct));
         UpdateComposer();
+        if (_viewModel.Media.Status is { Length: > 0 } status) await DisplayAlertAsync("Вложение", status, "OK");
     }
 
     private void OnRemoveAttachmentClicked(object? sender, EventArgs e)

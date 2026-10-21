@@ -7,6 +7,7 @@ namespace Messenger.Maui.Features.Chats;
 public sealed class GalleryTile(GalleryMediaItem item) : ObservableObject
 {
     private int _selectionNumber;
+    private double _tileSize = 120;
     public GalleryMediaItem Item { get; } = item;
     public bool IsVideo => Item.Kind == MediaKind.Video;
     public string Duration => IsVideo ? PlaybackTime.Format(Item.DurationMs ?? 0) : "";
@@ -16,6 +17,7 @@ public sealed class GalleryTile(GalleryMediaItem item) : ObservableObject
         set { if (SetProperty(ref _selectionNumber, value)) OnPropertyChanged(nameof(IsSelected)); }
     }
     public bool IsSelected => SelectionNumber > 0;
+    public double TileSize { get => _tileSize; set => SetProperty(ref _tileSize, value); }
 }
 
 public sealed class AttachmentPickerViewModel(IGalleryService gallery, int selectionLimit) : ObservableObject
@@ -26,6 +28,7 @@ public sealed class AttachmentPickerViewModel(IGalleryService gallery, int selec
     private string _status = "";
     private int _generation;
     private GalleryAccess _access = GalleryAccess.Denied;
+    private double _tileSize = 120;
     public ObservableCollection<GalleryTile> Items { get; } = [];
     public bool IsLoading { get => _isLoading; private set { if (SetProperty(ref _isLoading, value)) OnPropertyChanged(nameof(ShowEmpty)); } }
     public bool IsPreparing { get => _isPreparing; private set { if (SetProperty(ref _isPreparing, value)) NotifySelection(); } }
@@ -73,7 +76,7 @@ public sealed class AttachmentPickerViewModel(IGalleryService gallery, int selec
             if (generation != _generation || ct.IsCancellationRequested) return;
             var known = Items.Select(tile => tile.Item.Id).ToHashSet();
             foreach (var item in page.Items)
-                if (known.Add(item.Id)) Items.Add(new(item));
+                if (known.Add(item.Id)) Items.Add(new(item) { TileSize = _tileSize });
             _hasMore = page.NextCursor is not null && page.NextCursor != _cursor;
             _cursor = page.NextCursor;
             OnPropertyChanged(nameof(ShowEmpty));
@@ -115,6 +118,13 @@ public sealed class AttachmentPickerViewModel(IGalleryService gallery, int selec
     }
 
     public void Close() { _generation++; IsLoading = false; }
+
+    public void UpdateGalleryWidth(double width)
+    {
+        if (!double.IsFinite(width) || width <= 4) return;
+        _tileSize = (width - 4) / 3;
+        foreach (var tile in Items) tile.TileSize = _tileSize;
+    }
 
     private void NotifySelection()
     {

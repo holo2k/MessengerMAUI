@@ -1,4 +1,5 @@
 using Messenger.Contracts.Music;
+using Messenger.Contracts.Media;
 
 namespace Messenger.Contracts.Messages;
 
@@ -16,5 +17,6 @@ public sealed record MessageResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset? EditedAt,
     DateTimeOffset? DeletedAt,
-    MusicTrackResponse? MusicTrack = null);
+    MusicTrackResponse? MusicTrack = null,
+    IReadOnlyList<StoredObjectResponse>? Attachments = null);
 public sealed record MessagePageResponse(IReadOnlyList<MessageResponse> Items, string? NextCursor);

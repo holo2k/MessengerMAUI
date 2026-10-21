@@ -11,6 +11,7 @@ public sealed class MessageAttachmentView : ContentView
     private readonly Image _image = new() { Aspect = Aspect.AspectFit, InputTransparent = true };
     private readonly Label _status = new() { FontSize = 13, HorizontalTextAlignment = TextAlignment.Center, VerticalTextAlignment = TextAlignment.Center, InputTransparent = true };
     private readonly ActivityIndicator _loading = new() { Color = Color.FromArgb("#0088FF"), HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center };
+    private readonly SkeletonView _skeleton = new() { Kind = SkeletonKind.Image, IsVisible = false };
     private CancellationTokenSource? _load;
     private byte[]? _bytes;
     private bool _opening;
@@ -23,6 +24,7 @@ public sealed class MessageAttachmentView : ContentView
         var grid = new Grid { IsClippedToBounds = true, SafeAreaEdges = SafeAreaEdges.None, BackgroundColor = Color.FromArgb("#E8EDF2") };
         grid.Add(_image);
         grid.Add(_status);
+        grid.Add(_skeleton);
         grid.Add(_loading);
         Content = grid;
         var tap = new TapGestureRecognizer();
@@ -46,7 +48,10 @@ public sealed class MessageAttachmentView : ContentView
         _image.Source = null;
         _status.IsVisible = true;
         _loading.IsRunning = _loading.IsVisible = false;
+        _skeleton.IsVisible = false;
         if (Attachment is not { } attachment) return;
+        _skeleton.IsVisible = IsImage;
+        _status.IsVisible = !IsImage;
         HeightRequest = IsImage ? (Width > 0 ? Width : 260) : 64;
         _status.Text = attachment.FileName;
         SemanticProperties.SetDescription(this, attachment.FileName);
@@ -57,7 +62,7 @@ public sealed class MessageAttachmentView : ContentView
 
     private async Task LoadImageAsync(IMessageAttachmentClient client, StoredObjectResponse attachment, CancellationToken ct)
     {
-        _loading.IsRunning = _loading.IsVisible = true;
+        _loading.IsRunning = true;
         try
         {
             await ImageSlots.WaitAsync(ct);
@@ -74,8 +79,22 @@ public sealed class MessageAttachmentView : ContentView
             _status.IsVisible = false;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        catch (Exception) { if (!ct.IsCancellationRequested) _status.Text = "Не удалось загрузить фото. Нажмите, чтобы повторить."; }
-        finally { if (!ct.IsCancellationRequested) _loading.IsRunning = _loading.IsVisible = false; }
+        catch (Exception)
+        {
+            if (!ct.IsCancellationRequested)
+            {
+                _status.IsVisible = true;
+                _status.Text = "Не удалось загрузить фото. Нажмите, чтобы повторить.";
+            }
+        }
+        finally
+        {
+            if (!ct.IsCancellationRequested)
+            {
+                _loading.IsRunning = _loading.IsVisible = false;
+                _skeleton.IsVisible = false;
+            }
+        }
     }
 
     private async void OnTapped(object? sender, TappedEventArgs e)

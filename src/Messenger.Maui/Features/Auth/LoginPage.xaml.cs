@@ -21,7 +21,7 @@ public partial class LoginPage : ContentPage
         base.OnAppearing();
         if (_initialized) return;
         _initialized = true;
-        await RunAsync(_viewModel.InitializeAsync);
+        await SessionLoading.LoadAsync(async () => { await RunAsync(_viewModel.InitializeAsync); });
     }
 
     private async void OnContinueClicked(object? sender, EventArgs e)

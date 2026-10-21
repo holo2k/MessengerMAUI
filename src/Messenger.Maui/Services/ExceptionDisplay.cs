@@ -2,6 +2,10 @@ namespace Messenger.Maui.Services;
 
 public static class ExceptionDisplay
 {
+    public static bool IsUnauthorized(Exception exception) =>
+        exception is HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized } ||
+        exception.InnerException is { } inner && IsUnauthorized(inner);
+
     public static string Format(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);

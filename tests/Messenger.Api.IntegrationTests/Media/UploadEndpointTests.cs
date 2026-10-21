@@ -54,6 +54,12 @@ public sealed class UploadEndpointTests : IAsyncLifetime
         }
 
         var stored = await PostAsync<StoredObjectResponse>(client, $"/api/uploads/{upload.Id}/complete", new { });
+        // Npgsql/PostgreSQL stores timestamps at microsecond precision; the upload response
+        // still contains the original .NET timestamp with 100-nanosecond ticks.
+        var persistedStored = stored with
+        {
+            CreatedAt = stored.CreatedAt.AddTicks(-(stored.CreatedAt.Ticks % TimeSpan.TicksPerMicrosecond))
+        };
         var authorization = await client.GetFromJsonAsync<DownloadAuthorizationResponse>($"/api/objects/{stored.Id}/download");
         Assert.NotNull(authorization);
         Assert.InRange(authorization.ExpiresAt - DateTimeOffset.UtcNow, TimeSpan.FromMinutes(4), TimeSpan.FromMinutes(6));
@@ -70,10 +76,10 @@ public sealed class UploadEndpointTests : IAsyncLifetime
         var chat = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(recipient.UserId));
         var photoMessage = await PostAsync<MessageResponse>(client, $"/api/chats/{chat.Id}/messages",
             new SendMessageRequest(Guid.NewGuid(), "image", null, [stored.Id]));
-        Assert.Equal(stored, Assert.Single(photoMessage.Attachments!));
+        Assert.Equal(persistedStored, Assert.Single(photoMessage.Attachments!));
         Authorize(client, recipient);
         var received = await client.GetFromJsonAsync<MessagePageResponse>($"/api/chats/{chat.Id}/messages");
-        Assert.Equal(stored, Assert.Single(Assert.Single(received!.Items).Attachments!));
+        Assert.Equal(persistedStored, Assert.Single(Assert.Single(received!.Items).Attachments!));
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/objects/{stored.Id}/download")).StatusCode);
 
         Authorize(client, outsider);

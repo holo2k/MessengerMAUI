@@ -18,7 +18,8 @@
         </Grid>
         <Label Grid.Row="1" Text="{Binding Status}" FontSize="12" TextColor="{StaticResource TextSecondary}" Margin="12,6"
                IsVisible="{Binding Status, Converter={StaticResource DisplayValue}, ConverterParameter=notEmpty}" />
-        <Grid Grid.Row="2">
+        <ui:LoadingHost x:Name="GalleryLoading" Grid.Row="2" Kind="Gallery">
+        <Grid>
             <CollectionView x:Name="GalleryList" ItemsSource="{Binding Items}" SelectionMode="None" RemainingItemsThreshold="12" RemainingItemsThresholdReached="OnLoadMore" ItemSizingStrategy="MeasureAllItems" SizeChanged="OnGallerySizeChanged">
                 <CollectionView.ItemsLayout><GridItemsLayout Orientation="Vertical" Span="3" HorizontalItemSpacing="2" VerticalItemSpacing="2" /></CollectionView.ItemsLayout>
                 <CollectionView.ItemTemplate><DataTemplate x:DataType="chats:GalleryTile">
@@ -46,6 +47,7 @@
             </VerticalStackLayout>
             <ActivityIndicator IsVisible="{Binding IsLoading}" IsRunning="{Binding IsLoading}" Color="{StaticResource Primary}" HorizontalOptions="Center" VerticalOptions="Center" />
         </Grid>
+        </ui:LoadingHost>
         <Grid Grid.Row="3" ColumnDefinitions="*,*,*" BackgroundColor="{StaticResource BarBackground}" Padding="8,6">
             <VerticalStackLayout Spacing="0">
                 <VerticalStackLayout.GestureRecognizers><TapGestureRecognizer Tapped="OnGalleryTapped" /></VerticalStackLayout.GestureRecognizers>

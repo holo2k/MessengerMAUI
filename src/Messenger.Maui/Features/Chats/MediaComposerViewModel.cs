@@ -12,10 +12,12 @@ public sealed class ComposerAttachment(MediaSelection selection) : ObservableObj
     private double _progress;
     private UploadItemState _state = UploadItemState.Uploading;
     private StoredObjectResponse? _storedObject;
+    private string? _errorMessage;
     public MediaSelection Selection { get; } = selection;
     public double Progress { get => _progress; set => SetProperty(ref _progress, value); }
     public UploadItemState State { get => _state; set => SetProperty(ref _state, value); }
     public StoredObjectResponse? StoredObject { get => _storedObject; set => SetProperty(ref _storedObject, value); }
+    public string? ErrorMessage { get => _errorMessage; set => SetProperty(ref _errorMessage, value); }
 }
 
 public sealed class MediaComposerViewModel(
@@ -54,7 +56,6 @@ public sealed class MediaComposerViewModel(
         var items = selections.Select(selection => new ComposerAttachment(selection)).ToArray();
         foreach (var item in items) Attachments.Add(item);
         foreach (var item in items) await UploadAsync(item, ct);
-        if (items.Any(item => item.State == UploadItemState.Failed)) Status = "Не все файлы загружены. Нажмите на вложение, чтобы повторить загрузку.";
     }
 
     public Task RetryAsync(ComposerAttachment item, CancellationToken ct = default) => UploadAsync(item, ct);
@@ -68,7 +69,9 @@ public sealed class MediaComposerViewModel(
     private async Task UploadAsync(ComposerAttachment item, CancellationToken ct)
     {
         item.State = UploadItemState.Uploading;
-        Status = null;
+        item.Progress = 0;
+        item.ErrorMessage = null;
+        RefreshStatus();
         try
         {
             item.StoredObject = await uploader.UploadAsync(item.Selection, new InlineProgress(value => item.Progress = value), ct);
@@ -78,13 +81,22 @@ public sealed class MediaComposerViewModel(
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             item.State = UploadItemState.Failed;
-            Status = "Загрузка отменена";
+            item.ErrorMessage = "Загрузка отменена";
         }
         catch (Exception exception)
         {
             item.State = UploadItemState.Failed;
-            Status = exception.Message;
+            item.ErrorMessage = exception.Message;
         }
+        RefreshStatus();
+    }
+
+    private void RefreshStatus()
+    {
+        var errors = Attachments.Where(item => item.State == UploadItemState.Failed)
+            .Select(item => $"{item.Selection.FileName}: {item.ErrorMessage}").ToArray();
+        Status = errors.Length == 0 ? null : string.Join(Environment.NewLine, errors) +
+            Environment.NewLine + "Нажмите на вложение, чтобы повторить загрузку.";
     }
 
     private static StoredObjectResponse RequireUploaded(ComposerAttachment item) =>

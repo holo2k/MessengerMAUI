@@ -16,7 +16,8 @@
             </VerticalStackLayout>
         </Grid>
         <Label Grid.Row="2" Text="Выберите чат" FontSize="14" TextColor="{StaticResource TextSecondary}" Margin="16,4,16,8" />
-        <CollectionView x:Name="ChatChoices" Grid.Row="3" ItemsSource="{Binding Chats}" SelectionMode="Single" SelectionChanged="OnChatSelected">
+        <ui:LoadingHost x:Name="ChatsLoading" Grid.Row="3" Kind="Chats">
+        <CollectionView x:Name="ChatChoices" ItemsSource="{Binding Chats}" SelectionMode="Single" SelectionChanged="OnChatSelected">
             <CollectionView.EmptyView><Label Text="Нет доступных чатов" HorizontalTextAlignment="Center" TextColor="{StaticResource TextSecondary}" Margin="24" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate><DataTemplate x:DataType="chats:ChatListItem">
                 <Grid ColumnDefinitions="48,*" ColumnSpacing="12" Padding="16,10">
@@ -25,6 +26,7 @@
                 </Grid>
             </DataTemplate></CollectionView.ItemTemplate>
         </CollectionView>
+        </ui:LoadingHost>
         <Grid x:Name="SendingOverlay" Grid.RowSpan="4" BackgroundColor="#CCFFFFFF" IsVisible="False" InputTransparent="False">
             <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
                 <ActivityIndicator IsRunning="True" Color="{StaticResource Primary}" />

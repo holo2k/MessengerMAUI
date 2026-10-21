@@ -41,6 +41,7 @@
     <Compile Include="..\..\src\Messenger.Maui\Services\IGalleryService.cs" Link="Services\IGalleryService.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\AttachmentPickerViewModel.cs" Link="Features\Chats\AttachmentPickerViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\UploadClient.cs" Link="Services\UploadClient.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\MessageAttachmentClient.cs" Link="Services\MessageAttachmentClient.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\MediaComposerViewModel.cs" Link="Features\Chats\MediaComposerViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Music\MusicViewModel.cs" Link="Features\Music\MusicViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\MusicServices.cs" Link="Services\MusicServices.cs" />

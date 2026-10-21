@@ -2,11 +2,25 @@ using Messenger.Application.Chats;
 using Messenger.Domain.Chats;
 using Messenger.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Messenger.Domain.Media;
 
 namespace Messenger.Infrastructure.Social;
 
 public sealed class EfMessageStore(MessengerDbContext dbContext) : IMessageStore
 {
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<StoredObject>>> ListAttachmentsAsync(
+        IReadOnlyCollection<Guid> messageIds, CancellationToken cancellationToken)
+    {
+        if (messageIds.Count == 0) return new Dictionary<Guid, IReadOnlyList<StoredObject>>();
+        var rows = await (from attachment in dbContext.MessageAttachments
+                          join value in dbContext.StoredObjects on attachment.ObjectId equals value.Id
+                          where messageIds.Contains(attachment.MessageId) && value.Status == StoredObjectStatus.Available
+                          orderby attachment.Position
+                          select new { attachment.MessageId, Object = value }).AsNoTracking().ToArrayAsync(cancellationToken);
+        return rows.GroupBy(row => row.MessageId).ToDictionary(group => group.Key,
+            group => (IReadOnlyList<StoredObject>)group.Select(row => row.Object).ToArray());
+    }
+
     public Task<Message?> FindByClientIdAsync(Guid senderId, Guid clientMessageId, CancellationToken cancellationToken) =>
         dbContext.Messages.SingleOrDefaultAsync(message =>
             message.SenderUserId == senderId && message.ClientMessageId == clientMessageId, cancellationToken);

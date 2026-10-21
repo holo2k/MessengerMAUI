@@ -18,7 +18,8 @@
             </Grid>
         </Border>
         <Entry x:Name="GroupTitleEntry" Grid.Row="2" Placeholder="Название группы" Margin="16,0,16,8" IsVisible="False" />
-        <CollectionView x:Name="ContactsList" Grid.Row="3" SelectionMode="Multiple" SelectionChanged="OnSelectionChanged">
+        <ui:LoadingHost x:Name="ContactsLoading" Grid.Row="3">
+        <CollectionView x:Name="ContactsList" SelectionMode="Multiple" SelectionChanged="OnSelectionChanged">
             <CollectionView.EmptyView><Label Text="Контакты не найдены" HorizontalTextAlignment="Center" Margin="24,60" TextColor="{StaticResource TextSecondary}" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="contacts:ContactResponse">
@@ -33,5 +34,6 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
+        </ui:LoadingHost>
     </Grid>
 </ContentPage>

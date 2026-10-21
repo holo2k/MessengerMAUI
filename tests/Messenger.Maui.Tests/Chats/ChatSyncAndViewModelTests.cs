@@ -13,6 +13,62 @@ namespace Messenger.Maui.Tests.Chats;
 public sealed class ChatSyncAndViewModelTests
 {
     [Fact]
+    public async Task Startup_unauthorized_connection_uses_API_session_recovery_then_reconnects_without_losing_subscriptions()
+    {
+        var chat = Chat(Guid.NewGuid());
+        var api = new FakeConversationApi();
+        api.ChatRows.Add(chat);
+        var realtime = new FakeRealtimeClient
+        {
+            ConnectFailure = new HttpRequestException("Expired token", null, System.Net.HttpStatusCode.Unauthorized),
+            ConnectFailuresRemaining = 1,
+            BeforeConnect = attempt => { if (attempt == 2) Assert.Equal(1, api.ChatListLookups); }
+        };
+        var sync = new ChatListSyncService(api, realtime);
+        var changes = 0;
+        sync.ChatChanged += (_, _) => { changes++; return Task.CompletedTask; };
+
+        await sync.StartAsync();
+        await sync.StartAsync();
+        await realtime.EmitAsync(new MessageCreatedEvent(chat.Id, Guid.NewGuid(), 1));
+
+        Assert.Equal(2, realtime.ConnectAttempts);
+        Assert.Equal(1, api.ChatListLookups);
+        Assert.Equal(1, changes);
+    }
+
+    [Fact]
+    public async Task Persistent_unauthorized_connection_is_retried_only_once_and_can_be_started_later()
+    {
+        var api = new FakeConversationApi();
+        var realtime = new FakeRealtimeClient
+        {
+            ConnectFailure = new HttpRequestException("Expired token", null, System.Net.HttpStatusCode.Unauthorized),
+            ConnectFailuresRemaining = 2
+        };
+        var sync = new ChatListSyncService(api, realtime);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => sync.StartAsync());
+        await sync.StartAsync();
+
+        Assert.Equal(3, realtime.ConnectAttempts);
+        Assert.Equal(1, api.ChatListLookups);
+    }
+
+    [Fact]
+    public async Task Connection_errors_other_than_401_are_not_hidden_or_retried_as_session_refresh()
+    {
+        var api = new FakeConversationApi();
+        var failure = new HttpRequestException("Unavailable", null, System.Net.HttpStatusCode.ServiceUnavailable);
+        var realtime = new FakeRealtimeClient { ConnectFailure = failure, ConnectFailuresRemaining = 1 };
+        var sync = new ChatListSyncService(api, realtime);
+
+        Assert.Same(failure, await Assert.ThrowsAsync<HttpRequestException>(() => sync.StartAsync()));
+        Assert.Equal(1, realtime.ConnectAttempts);
+        Assert.Equal(0, api.ChatListLookups);
+    }
+
+    [Fact]
     public async Task Chat_list_sync_start_is_idempotent_and_fetches_one_summary_per_event()
     {
         var chat = Chat(Guid.NewGuid());
@@ -492,6 +548,10 @@ public sealed class ChatSyncAndViewModelTests
 
     private sealed class FakeRealtimeClient : IChatRealtimeClient
     {
+        public Exception? ConnectFailure { get; init; }
+        public int ConnectFailuresRemaining { get; set; }
+        public int ConnectAttempts { get; private set; }
+        public Action<int>? BeforeConnect { get; init; }
         public event Func<MessageCreatedEvent, Task>? MessageCreated;
         public event Func<ReadPositionChangedEvent, Task>? ReadPositionChanged;
         public event Func<Task>? Reconnected;
@@ -504,6 +564,10 @@ public sealed class ChatSyncAndViewModelTests
         }
         public Task ConnectAsync(CancellationToken cancellationToken = default)
         {
+            ConnectAttempts++;
+            BeforeConnect?.Invoke(ConnectAttempts);
+            if (ConnectFailuresRemaining-- > 0 && ConnectFailure is { } failure)
+                return Task.FromException(failure);
             ConnectionStateChanged?.Invoke(ChatConnectionState.Connecting);
             ConnectionStateChanged?.Invoke(ChatConnectionState.Connected);
             return Task.CompletedTask;

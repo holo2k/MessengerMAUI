@@ -2,9 +2,11 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:auth="clr-namespace:Messenger.Maui.Features.Auth"
+             xmlns:ui="clr-namespace:Messenger.Maui.Controls"
              x:Class="Messenger.Maui.Features.Auth.LoginPage" x:DataType="auth:LoginViewModel"
              NavigationPage.HasNavigationBar="False" Title="Вход"
              BackgroundColor="{StaticResource BarBackground}">
+    <ui:LoadingHost x:Name="SessionLoading" Kind="Form">
     <Grid RowDefinitions="Auto,*">
         <Grid ColumnDefinitions="80,*,80" HeightRequest="44" Padding="4,0">
             <Button x:Name="BackButton" Text="" Clicked="OnBackClicked" IsVisible="False" />
@@ -44,4 +46,5 @@
             </VerticalStackLayout>
         </ScrollView>
     </Grid>
+    </ui:LoadingHost>
 </ContentPage>

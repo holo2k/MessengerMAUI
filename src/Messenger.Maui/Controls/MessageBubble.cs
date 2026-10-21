@@ -12,7 +12,8 @@ public sealed class MessageBubble : ContentView
     public static readonly BindableProperty CurrentUserIdProperty = BindableProperty.Create(
         nameof(CurrentUserId), typeof(Guid), typeof(MessageBubble), Guid.Empty, propertyChanged: Refresh);
     public static readonly BindableProperty ReadSequenceProperty = BindableProperty.Create(
-        nameof(ReadSequence), typeof(long), typeof(MessageBubble), 0L, propertyChanged: Refresh);
+        nameof(ReadSequence), typeof(long), typeof(MessageBubble), 0L, propertyChanged: (view, _, _) => ((MessageBubble)view).UpdateReceipt());
+    private Image? _receipt;
     public static readonly BindableProperty PlayerProperty = BindableProperty.Create(
         nameof(Player), typeof(MusicViewModel), typeof(MessageBubble), null, propertyChanged: Refresh);
     public MusicViewModel? Player { get => (MusicViewModel?)GetValue(PlayerProperty); set => SetValue(PlayerProperty, value); }
@@ -22,7 +23,12 @@ public sealed class MessageBubble : ContentView
     public MessageBubble()
     {
         Padding = new Thickness(12, 3);
-        SizeChanged += (_, _) => { if (Content is Border border) border.MaximumWidthRequest = Math.Max(160, Width * 0.82); };
+        SizeChanged += (_, _) =>
+        {
+            if (Content is not Border border) return;
+            border.MaximumWidthRequest = Math.Max(160, Width * 0.82);
+            if (Message?.Attachments is { Count: > 0 }) border.WidthRequest = Math.Min(300, border.MaximumWidthRequest);
+        };
     }
 
     public MessageResponse? Message { get => (MessageResponse?)GetValue(MessageProperty); set => SetValue(MessageProperty, value); }
@@ -34,6 +40,7 @@ public sealed class MessageBubble : ContentView
     private void Render()
     {
         if (Message is not { } message) return;
+        _receipt = null;
         var outgoing = CurrentUserId != Guid.Empty && message.SenderUserId == CurrentUserId;
         var stack = new VerticalStackLayout { Spacing = 3 };
         if (message.DeletedAt is null && message.MusicTrack is { } track)
@@ -67,6 +74,12 @@ public sealed class MessageBubble : ContentView
             card.Add(play, 2);
             stack.Add(card);
         }
+        else if (message.DeletedAt is null && message.Attachments is { Count: > 0 } attachments)
+        {
+            foreach (var attachment in attachments) stack.Add(new MessageAttachmentView { Attachment = attachment });
+            if (!string.IsNullOrWhiteSpace(message.Body))
+                stack.Add(new Label { Text = message.Body, FontSize = 16, LineBreakMode = LineBreakMode.WordWrap });
+        }
         else
             stack.Add(new Label { Text = DisplayValueConverter.MessageText(message), FontSize = 16, LineBreakMode = LineBreakMode.WordWrap });
         var metadata = new HorizontalStackLayout { Spacing = 4, HorizontalOptions = LayoutOptions.End };
@@ -85,6 +98,7 @@ public sealed class MessageBubble : ContentView
             };
             SemanticProperties.SetDescription(receipt, read ? "Прочитано" : "Отправлено");
             metadata.Add(receipt);
+            _receipt = receipt;
         }
         stack.Add(metadata);
         Content = new Border
@@ -94,7 +108,16 @@ public sealed class MessageBubble : ContentView
             BackgroundColor = Color.FromArgb(outgoing ? "#F0EAFF" : "#FFFFFF"),
             HorizontalOptions = outgoing ? LayoutOptions.End : LayoutOptions.Start,
             MaximumWidthRequest = Width > 0 ? Math.Max(160, Width * 0.82) : 300,
+            WidthRequest = message.Attachments is { Count: > 0 } ? Math.Min(300, Width > 0 ? Math.Max(160, Width * 0.82) : 300) : -1,
             Content = stack
         };
+    }
+
+    private void UpdateReceipt()
+    {
+        if (_receipt is null || Message is not { } message) return;
+        var read = message.Sequence <= ReadSequence;
+        _receipt.Source = read ? "message_read.png" : "message_sent.png";
+        SemanticProperties.SetDescription(_receipt, read ? "Прочитано" : "Отправлено");
     }
 }

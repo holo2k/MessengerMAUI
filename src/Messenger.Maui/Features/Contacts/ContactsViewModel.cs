@@ -13,8 +13,9 @@ public sealed class ContactsViewModel(
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
+        var contacts = await api.GetContactsAsync(cancellationToken);
         Contacts.Clear();
-        foreach (var contact in await api.GetContactsAsync(cancellationToken))
+        foreach (var contact in contacts)
         {
             Contacts.Add(contact);
         }
@@ -22,8 +23,9 @@ public sealed class ContactsViewModel(
 
     public async Task SearchAsync(string query, CancellationToken cancellationToken = default)
     {
+        var users = await api.SearchUsersAsync(query, cancellationToken);
         SearchResults.Clear();
-        foreach (var user in await api.SearchUsersAsync(query, cancellationToken))
+        foreach (var user in users)
         {
             SearchResults.Add(user);
         }

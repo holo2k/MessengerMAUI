@@ -83,8 +83,9 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api, MediaCompos
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
+        var messages = await api.GetMessagesAsync(chatId, 0, cancellationToken);
         Messages.Clear();
-        foreach (var message in await api.GetMessagesAsync(chatId, 0, cancellationToken))
+        foreach (var message in messages)
         {
             Messages.Add(message);
         }

@@ -9,7 +9,8 @@
             <Label Grid.Column="1" Text="Отправить песню" FontSize="17" FontAttributes="Bold" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" />
         </Grid>
         <SearchBar x:Name="Search" Grid.Row="1" Placeholder="Трек или исполнитель" SearchButtonPressed="OnSearchPressed" TextChanged="OnSearchTextChanged" Margin="8,4" />
-        <CollectionView x:Name="TrackChoices" Grid.Row="2" ItemsSource="{Binding Tracks}" SelectionMode="Single" SelectionChanged="OnTrackSelected">
+        <ui:LoadingHost x:Name="TracksLoading" Grid.Row="2" Kind="Music">
+        <CollectionView x:Name="TrackChoices" ItemsSource="{Binding Tracks}" SelectionMode="Single" SelectionChanged="OnTrackSelected">
             <CollectionView.EmptyView><Label Text="Найдите песню или добавьте её на странице музыки" HorizontalTextAlignment="Center" TextColor="{StaticResource TextSecondary}" Margin="24" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate><DataTemplate x:DataType="contracts:MusicTrackResponse">
                 <Grid ColumnDefinitions="48,*,Auto" ColumnSpacing="12" Padding="16,8">
@@ -22,6 +23,7 @@
                 </Grid>
             </DataTemplate></CollectionView.ItemTemplate>
         </CollectionView>
+        </ui:LoadingHost>
         <Grid x:Name="SendingOverlay" Grid.RowSpan="3" BackgroundColor="#CCFFFFFF" IsVisible="False">
             <ActivityIndicator IsRunning="True" Color="{StaticResource Primary}" HorizontalOptions="Center" VerticalOptions="Center" />
         </Grid>

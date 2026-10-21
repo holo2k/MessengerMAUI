@@ -20,11 +20,11 @@ public partial class ContactDetailsPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await RunAsync(async () =>
+        await ProfileLoading.LoadAsync(() => RunAsync(async () =>
         {
             await _viewModel.LoadAsync(_userId);
             MuteSwitch.IsToggled = _viewModel.IsMuted;
-        });
+        }));
     }
 
     private async void OnBackClicked(object? sender, EventArgs e)

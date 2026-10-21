@@ -20,7 +20,7 @@ public partial class NewChatPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        try { _contacts = await _api.GetContactsAsync(); ContactsList.ItemsSource = _contacts; }
+        try { await ContactsLoading.LoadAsync(async () => { _contacts = await _api.GetContactsAsync(); ContactsList.ItemsSource = _contacts; }); }
         catch (Exception exception) { await DisplayAlertAsync("Ошибка", exception.Message, "OK"); }
     }
 

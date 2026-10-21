@@ -53,9 +53,9 @@ public sealed class DisplayValueConverter : IValueConverter, IMultiValueConverte
     public static string MessageText(MessageResponse message) => message.DeletedAt.HasValue
         ? "Сообщение удалено"
         : message.Type == "music" ? message.MusicTrack is { } track ? $"{track.Title} — {track.Artist}" : "Трек недоступен"
-        : message.Body ?? message.Type switch
+        : !string.IsNullOrWhiteSpace(message.Body) ? message.Body : message.Type switch
         {
-            "photo" => "Фотография", "video" => "Видео", "audio" => "Аудиосообщение", _ => "Вложение"
+            "image" or "photo" => "Фотография", "video" => "Видео", "audio" => "Аудиосообщение", _ => "Вложение"
         };
 
     private static string Join(string first, string last) => $"{first} {last}".Trim();

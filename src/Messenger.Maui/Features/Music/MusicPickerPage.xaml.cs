@@ -34,11 +34,14 @@ public partial class MusicPickerPage : ContentPage
         var query = Search.Text?.Trim();
         try
         {
-            var rows = string.IsNullOrWhiteSpace(query)
-                ? await _api.LibraryAsync(CancellationToken.None) : await _api.SearchAsync(query, CancellationToken.None);
-            if (version != _queryVersion) return;
-            Tracks.Clear();
-            foreach (var row in rows) Tracks.Add(row);
+            await TracksLoading.LoadAsync(async () =>
+            {
+                var rows = string.IsNullOrWhiteSpace(query)
+                    ? await _api.LibraryAsync(CancellationToken.None) : await _api.SearchAsync(query, CancellationToken.None);
+                if (version != _queryVersion) return;
+                Tracks.Clear();
+                foreach (var row in rows) Tracks.Add(row);
+            }, replaceContent: true);
         }
         catch (Exception exception) { if (version == _queryVersion) await DisplayAlertAsync("Ошибка", exception.Message, "OK"); }
     }

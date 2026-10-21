@@ -4,6 +4,7 @@ using Messenger.Domain.Chats;
 using Messenger.Domain.Common;
 using Messenger.Application.Music;
 using Messenger.Domain.Music;
+using Messenger.Domain.Media;
 
 namespace Messenger.Application.Chats;
 
@@ -15,6 +16,9 @@ public sealed partial class MessageService(
     IClock clock,
     IMusicStore music) : IMessageService, IMessageSearchService
 {
+    public async Task<MessageView> GetAsync(Guid requesterUserId, Guid messageId, CancellationToken cancellationToken = default) =>
+        await ToViewAsync(await RequireMessageForMemberAsync(requesterUserId, messageId, cancellationToken), cancellationToken);
+
     public Task<MessageView> SendMusicAsync(Guid senderUserId, Guid chatId, Guid clientMessageId, Guid trackId,
         CancellationToken cancellationToken = default) =>
         SendCoreAsync(senderUserId, chatId, clientMessageId, MessageKind.Music, null, trackId, cancellationToken);
@@ -231,7 +235,8 @@ public sealed partial class MessageService(
         }
     }
 
-    private async Task<MessageView> ToViewAsync(Message message, CancellationToken cancellationToken)
+    private async Task<MessageView> ToViewAsync(Message message, CancellationToken cancellationToken,
+        IReadOnlyList<StoredObject>? attachments = null)
     {
         var pinned = await messageStore.FindPinAsync(message.ChatId, message.Id, cancellationToken) is not null;
         var body = message.DeletedAt is null
@@ -240,17 +245,22 @@ public sealed partial class MessageService(
             : null;
         var track = message.DeletedAt is null && message.MusicTrackId is { } trackId
             ? await music.FindTrackAsync(trackId, cancellationToken) : null;
-        return new MessageView(message, body, pinned, track?.Status == MusicTrackStatus.Available ? track : null);
+        if (message.DeletedAt is not null) attachments = [];
+        else if (attachments is null)
+            attachments = (await messageStore.ListAttachmentsAsync([message.Id], cancellationToken)).GetValueOrDefault(message.Id) ?? [];
+        return new MessageView(message, body, pinned, track?.Status == MusicTrackStatus.Available ? track : null, attachments);
     }
 
     private async Task<IReadOnlyList<MessageView>> ToViewsAsync(
         IEnumerable<Message> messages,
         CancellationToken cancellationToken)
     {
+        var rows = messages.ToArray();
+        var attachments = await messageStore.ListAttachmentsAsync(rows.Where(message => message.DeletedAt is null).Select(message => message.Id).ToArray(), cancellationToken);
         var result = new List<MessageView>();
-        foreach (var message in messages)
+        foreach (var message in rows)
         {
-            result.Add(await ToViewAsync(message, cancellationToken));
+            result.Add(await ToViewAsync(message, cancellationToken, attachments.GetValueOrDefault(message.Id) ?? []));
         }
         return result;
     }

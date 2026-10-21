@@ -14,7 +14,9 @@
             </Border>
             <Button x:Name="CancelSearchButton" Grid.Column="1" Text="Отмена" FontSize="14" Clicked="OnCancelSearchClicked" IsVisible="False" />
         </Grid>
-        <CollectionView x:Name="ContactsList" Grid.Row="1" ItemsSource="{Binding Contacts}" SelectionMode="Single" SelectionChanged="OnContactSelected">
+        <ui:LoadingHost x:Name="ContactsLoading" Grid.Row="1">
+        <Grid>
+        <CollectionView x:Name="ContactsList" ItemsSource="{Binding Contacts}" SelectionMode="Single" SelectionChanged="OnContactSelected">
             <CollectionView.EmptyView><Label Text="Здесь появятся ваши контакты" HorizontalTextAlignment="Center" Margin="24,60" TextColor="{StaticResource TextSecondary}" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="contacts:ContactResponse">
@@ -27,7 +29,7 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
-        <CollectionView x:Name="ResultsList" Grid.Row="1" ItemsSource="{Binding SearchResults}" IsVisible="False" SelectionMode="Single" SelectionChanged="OnSearchResultSelected">
+        <CollectionView x:Name="ResultsList" ItemsSource="{Binding SearchResults}" IsVisible="False" SelectionMode="Single" SelectionChanged="OnSearchResultSelected">
             <CollectionView.EmptyView><Label Text="Пользователь не найден" HorizontalTextAlignment="Center" Margin="24,60" TextColor="{StaticResource TextSecondary}" /></CollectionView.EmptyView>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="contacts:UserSearchResponse">
@@ -42,5 +44,7 @@
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
+        </Grid>
+        </ui:LoadingHost>
     </Grid>
 </ContentPage>

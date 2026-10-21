@@ -4,11 +4,40 @@ using Messenger.Domain.Chats;
 using Messenger.Domain.Common;
 using Messenger.Domain.Music;
 using Messenger.Application.Tests.Music;
+using Messenger.Domain.Media;
 
 namespace Messenger.Application.Tests.Chats;
 
 public sealed class MessageServiceTests
 {
+    [Fact]
+    public async Task Photo_attachments_are_returned_to_sender_recipient_search_and_pins_in_attachment_order()
+    {
+        var fixture = new Fixture(ChatType.Direct);
+        var sent = await fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Image, "Снимки");
+        var first = new StoredObject(Guid.NewGuid(), fixture.UserId, "first", "first.png", "image/png", 12, "checksum", StoredObjectStatus.Available, Fixture.Now);
+        var second = new StoredObject(Guid.NewGuid(), fixture.UserId, "second", "second.jpg", "image/jpeg", 20, "checksum", StoredObjectStatus.Available, Fixture.Now);
+        fixture.Store.Attachments[sent.Message.Id] = [first, second];
+        await fixture.Service.PinAsync(fixture.UserId, sent.Message.Id);
+
+        var views = new[]
+        {
+            await fixture.Service.GetAsync(fixture.UserId, sent.Message.Id),
+            Assert.Single(await fixture.Service.ListAsync(fixture.OtherUserId, fixture.Chat.Id, 0, 20)),
+            Assert.Single(await fixture.Service.SearchAsync(fixture.OtherUserId, fixture.Chat.Id, "снимки", 20)),
+            Assert.Single(await fixture.Service.ListPinsAsync(fixture.OtherUserId, fixture.Chat.Id))
+        };
+
+        Assert.All(views, view =>
+        {
+            Assert.Equal("Снимки", view.Body);
+            Assert.Equal([first.Id, second.Id], view.Attachments!.Select(value => value.Id));
+        });
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.GetAsync(Guid.NewGuid(), sent.Message.Id));
+        await fixture.Service.DeleteAsync(fixture.UserId, sent.Message.Id, globally: true);
+        Assert.Empty((await fixture.Service.GetAsync(fixture.OtherUserId, sent.Message.Id)).Attachments!);
+    }
+
     [Fact]
     public async Task Send_is_idempotent_per_sender_client_id_and_sequences_are_monotonic()
     {
@@ -192,6 +221,9 @@ public sealed class MessageServiceTests
 
     private sealed class MemoryMessageStore : IMessageStore, IChatStore
     {
+        public Dictionary<Guid, IReadOnlyList<StoredObject>> Attachments { get; } = [];
+        public Task<IReadOnlyDictionary<Guid, IReadOnlyList<StoredObject>>> ListAttachmentsAsync(IReadOnlyCollection<Guid> messageIds, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyList<StoredObject>>>(Attachments.Where(row => messageIds.Contains(row.Key)).ToDictionary());
         public List<Chat> Chats { get; } = [];
         public List<ChatMember> Members { get; } = [];
         public List<Message> Messages { get; } = [];

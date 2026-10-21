@@ -111,6 +111,8 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api, MediaCompos
                 string.IsNullOrWhiteSpace(body) ? null : body,
                 uploaded.Select(item => item.StoredObject!.Id).ToArray(),
                 cancellationToken);
+        if (uploaded.Length > 0 && sent.Attachments is not { Count: > 0 })
+            sent = sent with { Attachments = uploaded.Select(item => item.StoredObject!).ToArray() };
         Receive(sent);
         ComposerText = string.Empty;
         Media?.Attachments.Clear();

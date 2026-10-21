@@ -12,6 +12,7 @@ public sealed class AvatarView : ContentView
     private readonly Label _initials;
     private readonly Image _image;
     private readonly Border _circle;
+    private readonly SkeletonView _skeleton = new() { Kind = SkeletonKind.Image, IsVisible = false };
     private int _loadVersion;
 
     public AvatarView()
@@ -27,6 +28,7 @@ public sealed class AvatarView : ContentView
         var content = new Grid();
         content.Children.Add(_image);
         content.Children.Add(_initials);
+        content.Children.Add(_skeleton);
         _circle = new Border
         {
             StrokeThickness = 0, StrokeShape = new Ellipse(),
@@ -58,11 +60,15 @@ public sealed class AvatarView : ContentView
     {
         var version = ++_loadVersion;
         var client = Handler?.MauiContext?.Services.GetService(typeof(IAvatarImageClient)) as IAvatarImageClient;
-        if (client is null || string.IsNullOrWhiteSpace(AvatarObjectId))
+        if (string.IsNullOrWhiteSpace(AvatarObjectId))
         {
             ShowFallback(version);
             return;
         }
+
+        _image.IsVisible = _initials.IsVisible = false;
+        _skeleton.IsVisible = true;
+        if (client is null) return;
 
         try
         {
@@ -80,6 +86,7 @@ public sealed class AvatarView : ContentView
             _image.Source = ImageSource.FromStream(() => new MemoryStream(bytes));
             _image.IsVisible = true;
             _initials.IsVisible = false;
+            _skeleton.IsVisible = false;
         }
         catch
         {
@@ -96,5 +103,6 @@ public sealed class AvatarView : ContentView
         _image.Source = null;
         _image.IsVisible = false;
         _initials.IsVisible = true;
+        _skeleton.IsVisible = false;
     }
 }

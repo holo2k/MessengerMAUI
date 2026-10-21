@@ -25,19 +25,22 @@ public partial class MusicPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing(); _viewModel.RefreshPlayback();
-        await SafeAsync(_viewModel.LoadLibraryAsync); await SafeAsync(_realtime.ConnectAsync);
+        await TracksLoading.LoadAsync(() => SafeAsync(_viewModel.LoadLibraryAsync)); await SafeAsync(_realtime.ConnectAsync);
     }
     private async void OnSearchClicked(object? s, EventArgs e) => await SearchVisibleAsync();
     private async Task SearchVisibleAsync()
     {
         if (string.IsNullOrWhiteSpace(_viewModel.SearchText)) { ShowLibrary(); return; }
         var query = _viewModel.SearchText.Trim();
-        await SafeAsync(_viewModel.SearchAsync);
-        if (_viewModel.SearchText.Trim() != query) return;
-        _isSearching = true;
-        SectionTitle.Text = "Результаты поиска";
-        EmptyMusicLabel.Text = "Ничего не найдено";
-        TracksList.ItemsSource = _viewModel.SearchResults;
+        await TracksLoading.LoadAsync(async () =>
+        {
+            await SafeAsync(_viewModel.SearchAsync);
+            if (_viewModel.SearchText.Trim() != query) return;
+            _isSearching = true;
+            SectionTitle.Text = "Результаты поиска";
+            EmptyMusicLabel.Text = "Ничего не найдено";
+            TracksList.ItemsSource = _viewModel.SearchResults;
+        }, replaceContent: true);
     }
     private async void OnSearchTextChanged(object? s, TextChangedEventArgs e)
     {

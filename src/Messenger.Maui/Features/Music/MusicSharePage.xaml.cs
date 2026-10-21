@@ -29,10 +29,13 @@ public partial class MusicSharePage : ContentPage
         if (_loaded) return;
         try
         {
-            var chats = await _conversations.GetChatsAsync();
-            Chats.Clear();
-            foreach (var chat in chats.Where(chat => !chat.IsHidden)) Chats.Add(new ChatListItem(chat, 0));
-            _loaded = true;
+            await ChatsLoading.LoadAsync(async () =>
+            {
+                var chats = await _conversations.GetChatsAsync();
+                Chats.Clear();
+                foreach (var chat in chats.Where(chat => !chat.IsHidden)) Chats.Add(new ChatListItem(chat, 0));
+                _loaded = true;
+            });
         }
         catch (Exception exception) { await DisplayAlertAsync("Ошибка", exception.Message, "OK"); }
     }

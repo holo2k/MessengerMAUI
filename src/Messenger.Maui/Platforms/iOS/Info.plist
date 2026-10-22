@@ -10,7 +10,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Камера нужна для отправки фото и видео в чат.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Микрофон нужен для записи аудиосообщений.</string>
+	<string>Микрофон нужен для записи голосовых и видеосообщений.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Доступ к медиатеке нужен для выбора вложений.</string>
 	<key>LSRequiresIPhoneOS</key>

@@ -85,6 +85,12 @@ public sealed class MessageBubble : ContentView
             card.Add(play, 2);
             stack.Add(card);
         }
+        else if (message.DeletedAt is null && message.Type is "voice" or "audio" or "video_note" or "videonote" && message.Attachments is { Count: > 0 })
+        {
+            foreach (var attachment in message.Attachments)
+                stack.Add(new ChatNoteView(message with { Attachments = [attachment] }));
+            if (!string.IsNullOrWhiteSpace(message.Body)) stack.Add(new Label { Text = message.Body, FontSize = 16 });
+        }
         else if (message.DeletedAt is null && message.Attachments is { Count: > 0 } attachments)
         {
             foreach (var attachment in attachments)
@@ -123,7 +129,7 @@ public sealed class MessageBubble : ContentView
         {
             Padding = new Thickness(10, 6), StrokeThickness = 0,
             StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
-            BackgroundColor = Color.FromArgb(outgoing ? "#F0EAFF" : "#FFFFFF"),
+            BackgroundColor = message.Type is "video_note" or "videonote" ? Colors.Transparent : Color.FromArgb(outgoing ? "#F0EAFF" : "#FFFFFF"),
             HorizontalOptions = outgoing ? LayoutOptions.End : LayoutOptions.Start,
             MaximumWidthRequest = Width > 0 ? Math.Max(160, Width * 0.82) : 300,
             WidthRequest = message.Attachments is { Count: > 0 } ? Math.Min(300, Width > 0 ? Math.Max(160, Width * 0.82) : 300) : -1,

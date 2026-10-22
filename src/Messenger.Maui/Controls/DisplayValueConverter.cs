@@ -51,7 +51,7 @@ public sealed class DisplayValueConverter : IValueConverter, IMultiValueConverte
         .Take(2).Select(part => StringInfo.GetNextTextElement(part))).ToUpperInvariant();
 
     public static string MessageText(MessageResponse message) => message.DeletedAt.HasValue
-        ? "Сообщение удалено"
+        ? string.Empty
         : message.Type == "music" ? message.MusicTrack is { } track ? $"{track.Title} — {track.Artist}" : "Трек недоступен"
         : !string.IsNullOrWhiteSpace(message.Body) ? message.Body : message.Type switch
         {

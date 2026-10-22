@@ -133,7 +133,7 @@ public partial class ChatsPage : ContentPage
         var store = _services.GetRequiredService<ISecureSessionStore>();
         var session = await store.GetAsync();
         await Navigation.PushAsync(new ChatPage(new ChatViewModel(item.Chat.Id, _api, media, _services.GetRequiredService<MessageForwarder>()), sync,
-            item.Chat, session?.Session.UserId ?? Guid.Empty, OpenPeerProfileAsync));
+            item.Chat, _services, session?.Session.UserId ?? Guid.Empty, OpenPeerProfileAsync));
     }
 
     private Task OpenPeerProfileAsync(Guid userId) =>

@@ -11,6 +11,95 @@ namespace Messenger.Application.Tests.Chats;
 public sealed class MessageServiceTests
 {
     [Fact]
+    public async Task Search_scans_older_batches_matches_case_and_yo_and_excludes_hidden_or_deleted_messages()
+    {
+        var fixture = new Fixture();
+        var first = await fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Text, "Ёжик на фотографии");
+        for (var index = 0; index < 105; index++)
+            await fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Text, "Другое сообщение");
+        var deleted = await fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Text, "Ежик фото удалено");
+        var hidden = await fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Text, "Ежик фото скрыто");
+        await fixture.Service.DeleteAsync(fixture.UserId, deleted.Message.Id, true);
+        await fixture.Service.HideAsync(fixture.UserId, hidden.Message.Id);
+        var results = await fixture.Service.SearchAsync(fixture.UserId, fixture.Chat.Id, "ЕЖ ФОТО", 20);
+        Assert.Equal(first.Message.Id, Assert.Single(results).Message.Id);
+    }
+
+    [Fact]
+    public async Task A_recipient_can_forward_photos_with_caption_and_order_without_owning_or_reuploading_the_files()
+    {
+        var fixture = new Fixture(ChatType.Direct);
+        var source = await fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Image, "Два снимка");
+        StoredObject[] photos = [
+            new(Guid.NewGuid(), fixture.UserId, "first", "one.jpg", "image/jpeg", 20, "sha1", StoredObjectStatus.Available, Fixture.Now),
+            new(Guid.NewGuid(), fixture.UserId, "second", "two.png", "image/png", 30, "sha2", StoredObjectStatus.Available, Fixture.Now)
+        ];
+        fixture.Store.Attachments[source.Message.Id] = photos;
+        var recipient = Guid.NewGuid();
+        var target = AddTarget(fixture, fixture.OtherUserId, recipient);
+        var clientId = Guid.NewGuid();
+
+        var forwarded = await fixture.Service.ForwardAsync(fixture.OtherUserId, source.Message.Id, target.Id, clientId);
+        var retry = await fixture.Service.ForwardAsync(fixture.OtherUserId, source.Message.Id, target.Id, clientId);
+
+        Assert.Equal(forwarded.Message.Id, retry.Message.Id);
+        Assert.True(forwarded.Message.IsForwarded);
+        Assert.Equal(fixture.OtherUserId, forwarded.Message.SenderUserId);
+        Assert.Equal("Два снимка", forwarded.Body);
+        Assert.Equal(photos.Select(photo => photo.Id), forwarded.Attachments!.Select(photo => photo.Id));
+        Assert.Equal(2, fixture.Store.Messages.Count);
+        Assert.All(forwarded.Attachments!, photo => Assert.Equal(fixture.UserId, photo.OwnerUserId));
+        var received = Assert.Single(await fixture.Service.ListAsync(recipient, target.Id, 0, 20));
+        Assert.Equal(photos.Select(photo => photo.Id), received.Attachments!.Select(photo => photo.Id));
+        await fixture.Service.EditAsync(fixture.UserId, source.Message.Id, "Новая подпись оригинала");
+        Assert.Equal("Два снимка", (await fixture.Service.GetAsync(recipient, forwarded.Message.Id)).Body);
+    }
+
+    [Fact]
+    public async Task Forwarding_requires_both_chat_memberships_and_a_visible_undeleted_source()
+    {
+        var fixture = new Fixture(ChatType.Direct);
+        var source = await fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Text, "Секрет");
+        var outsider = Guid.NewGuid();
+        var target = AddTarget(fixture, fixture.OtherUserId, outsider);
+
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.ForwardAsync(fixture.UserId, source.Message.Id, target.Id, Guid.NewGuid()));
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.ForwardAsync(outsider, source.Message.Id, target.Id, Guid.NewGuid()));
+        await fixture.Service.HideAsync(fixture.OtherUserId, source.Message.Id);
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.ForwardAsync(fixture.OtherUserId, source.Message.Id, target.Id, Guid.NewGuid()));
+        await fixture.Service.DeleteAsync(fixture.UserId, source.Message.Id, globally: true);
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.ForwardAsync(fixture.UserId, source.Message.Id, fixture.Chat.Id, Guid.NewGuid()));
+        Assert.Single(fixture.Store.Messages);
+    }
+
+    [Fact]
+    public async Task Forwarded_music_preserves_the_track_and_an_image_caption_can_be_removed()
+    {
+        var fixture = new Fixture(ChatType.Direct);
+        var track = new MusicTrack(Guid.NewGuid(), fixture.UserId, Guid.NewGuid(), "Песня", "Автор", 1000, null, Fixture.Now);
+        fixture.Music.Tracks.Add(track);
+        var source = await fixture.Service.SendMusicAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), track.Id);
+        var forwarded = await fixture.Service.ForwardAsync(fixture.OtherUserId, source.Message.Id, fixture.Chat.Id, Guid.NewGuid());
+        Assert.Equal(track.Id, forwarded.MusicTrack!.Id);
+        Assert.True(forwarded.Message.IsForwarded);
+        var photo = await fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Image, "Подпись");
+        Assert.Equal("", (await fixture.Service.EditAsync(fixture.UserId, photo.Message.Id, "")).Body);
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.EditAsync(fixture.OtherUserId, photo.Message.Id, "Чужая правка"));
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.EditAsync(fixture.UserId, source.Message.Id, "Подмена песни"));
+        var text = await fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), MessageKind.Text, "Текст");
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.EditAsync(fixture.UserId, text.Message.Id, " "));
+    }
+
+    private static Chat AddTarget(Fixture fixture, Guid sender, Guid recipient)
+    {
+        var chat = new Chat(Guid.NewGuid(), ChatType.Direct, sender, null, Fixture.Now);
+        fixture.Store.Chats.Add(chat);
+        fixture.Store.Members.Add(new(chat.Id, sender, ChatMemberRole.Member, Fixture.Now));
+        fixture.Store.Members.Add(new(chat.Id, recipient, ChatMemberRole.Member, Fixture.Now));
+        return chat;
+    }
+
+    [Fact]
     public async Task Photo_attachments_are_returned_to_sender_recipient_search_and_pins_in_attachment_order()
     {
         var fixture = new Fixture(ChatType.Direct);
@@ -67,7 +156,7 @@ public sealed class MessageServiceTests
     }
 
     [Fact]
-    public async Task Search_matches_complete_words_without_storing_plaintext_and_tampering_fails_closed()
+    public async Task Search_matches_substrings_without_storing_plaintext_and_tampering_fails_closed()
     {
         var fixture = new Fixture();
         var sent = await fixture.Service.SendAsync(
@@ -77,7 +166,7 @@ public sealed class MessageServiceTests
         var partial = await fixture.Service.SearchAsync(fixture.UserId, fixture.Chat.Id, "безопас", 20);
 
         Assert.Equal(sent.Message.Id, Assert.Single(exact).Message.Id);
-        Assert.Empty(partial);
+        Assert.Equal(sent.Message.Id, Assert.Single(partial).Message.Id);
         Assert.DoesNotContain("безопасный", fixture.Store.Messages.Single().BodyCiphertext, StringComparison.OrdinalIgnoreCase);
 
         fixture.Cipher.Tampered = true;
@@ -102,6 +191,10 @@ public sealed class MessageServiceTests
             fixture.Service.PinAsync(otherUser, sent.Message.Id))).Code);
         await fixture.Service.PinAsync(fixture.UserId, sent.Message.Id);
         Assert.Single(fixture.Store.Pins);
+        Assert.Empty(await fixture.Service.ListPinsAsync(fixture.UserId, fixture.Chat.Id));
+        Assert.Single(await fixture.Service.ListPinsAsync(otherUser, fixture.Chat.Id));
+        await fixture.Service.DeleteAsync(fixture.UserId, sent.Message.Id, globally: true);
+        Assert.Empty(await fixture.Service.ListPinsAsync(otherUser, fixture.Chat.Id));
     }
 
     [Fact]
@@ -221,6 +314,14 @@ public sealed class MessageServiceTests
 
     private sealed class MemoryMessageStore : IMessageStore, IChatStore
     {
+        public Task<bool> IsHiddenAsync(Guid messageId, Guid userId, CancellationToken ct) =>
+            Task.FromResult(Hidden.Any(value => value.MessageId == messageId && value.UserId == userId));
+        public Task AddAttachmentsAsync(Guid messageId, IReadOnlyList<Guid> objectIds, CancellationToken ct)
+        {
+            var objects = Attachments.Values.SelectMany(values => values).DistinctBy(value => value.Id).ToDictionary(value => value.Id);
+            Attachments[messageId] = objectIds.Select(id => objects[id]).ToArray();
+            return Task.CompletedTask;
+        }
         public Dictionary<Guid, IReadOnlyList<StoredObject>> Attachments { get; } = [];
         public Task<IReadOnlyDictionary<Guid, IReadOnlyList<StoredObject>>> ListAttachmentsAsync(IReadOnlyCollection<Guid> messageIds, CancellationToken ct) =>
             Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyList<StoredObject>>>(Attachments.Where(row => messageIds.Contains(row.Key)).ToDictionary());
@@ -238,11 +339,10 @@ public sealed class MessageServiceTests
         public Task<IReadOnlyList<Message>> ListMessagesAsync(Guid chatId, Guid userId, long afterSequence, int take, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<Message>>(Messages.Where(message => message.ChatId == chatId && message.Sequence > afterSequence &&
                 Hidden.All(hidden => hidden.MessageId != message.Id || hidden.UserId != userId)).OrderBy(message => message.Sequence).Take(take).ToArray());
-        public Task<IReadOnlyList<Message>> SearchMessagesAsync(Guid chatId, Guid userId, IReadOnlyCollection<string> tokens, int take, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<Message>>(Messages.Where(message => message.ChatId == chatId &&
-                    Hidden.All(hidden => hidden.MessageId != message.Id || hidden.UserId != userId) &&
-                    tokens.All(token => Tokens.Any(search => search.MessageId == message.Id && search.Token == token)))
-                .Take(take).ToArray());
+        public Task<IReadOnlyList<Message>> ListSearchCandidatesAsync(Guid chatId, Guid userId, long beforeSequence, int take, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<Message>>(Messages.Where(message => message.ChatId == chatId && message.Sequence < beforeSequence && message.DeletedAt is null &&
+                    Hidden.All(hidden => hidden.MessageId != message.Id || hidden.UserId != userId))
+                .OrderByDescending(message => message.Sequence).Take(take).ToArray());
         public Task AddMessageAsync(Message message, IReadOnlyCollection<MessageSearchToken> tokens, CancellationToken ct)
         {
             Messages.Add(message);

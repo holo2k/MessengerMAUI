@@ -7,6 +7,7 @@ using Messenger.Maui.Features.Contacts;
 using Plugin.Maui.Audio;
 using Messenger.Maui.Features.Music;
 using Messenger.Maui.Features.Settings;
+using CommunityToolkit.Maui;
 
 namespace Messenger.Maui;
 
@@ -17,7 +18,13 @@ public static class MauiProgram
 		var builder = MauiApp.CreateBuilder();
 		builder
 			.UseMauiApp<App>()
-			.ConfigureMauiHandlers(handlers => handlers.AddHandler<Controls.MessageBubble, Controls.MessageBubbleHandler>())
+			.ConfigureMauiHandlers(handlers =>
+			{
+				handlers.AddHandler<Controls.MessageBubble, Controls.MessageBubbleHandler>();
+				handlers.AddHandler<Controls.NoteRecordButton, Controls.NoteRecordButtonHandler>();
+				handlers.AddHandler<Controls.InlineNoteVideo, Controls.InlineNoteVideoHandler>();
+			})
+			.UseMauiCommunityToolkitCamera()
 			.AddAudio()
 			.ConfigureFonts(fonts =>
 			{

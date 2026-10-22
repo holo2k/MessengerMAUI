@@ -9,6 +9,8 @@ public sealed record MessageView(Message Message, string? Body, bool IsPinned, M
 
 public interface IMessageStore
 {
+    Task<bool> IsHiddenAsync(Guid messageId, Guid userId, CancellationToken cancellationToken);
+    Task AddAttachmentsAsync(Guid messageId, IReadOnlyList<Guid> objectIds, CancellationToken cancellationToken);
     Task<IReadOnlyDictionary<Guid, IReadOnlyList<StoredObject>>> ListAttachmentsAsync(
         IReadOnlyCollection<Guid> messageIds, CancellationToken cancellationToken);
     Task<Message?> FindByClientIdAsync(Guid senderId, Guid clientMessageId, CancellationToken cancellationToken);
@@ -19,10 +21,10 @@ public interface IMessageStore
         long afterSequence,
         int take,
         CancellationToken cancellationToken);
-    Task<IReadOnlyList<Message>> SearchMessagesAsync(
+    Task<IReadOnlyList<Message>> ListSearchCandidatesAsync(
         Guid chatId,
         Guid userId,
-        IReadOnlyCollection<string> tokens,
+        long beforeSequence,
         int take,
         CancellationToken cancellationToken);
     Task AddMessageAsync(
@@ -42,6 +44,8 @@ public interface IMessageStore
 
 public interface IMessageService
 {
+    Task<MessageView> ForwardAsync(Guid senderUserId, Guid messageId, Guid targetChatId, Guid clientMessageId,
+        CancellationToken cancellationToken = default);
     Task<MessageView> GetAsync(Guid requesterUserId, Guid messageId, CancellationToken cancellationToken = default);
     Task<MessageView> SendMusicAsync(Guid senderUserId, Guid chatId, Guid clientMessageId, Guid trackId,
         CancellationToken cancellationToken = default);
@@ -63,7 +67,7 @@ public interface IMessageService
         Guid messageId,
         string body,
         CancellationToken cancellationToken = default);
-    Task DeleteAsync(
+    Task<Message> DeleteAsync(
         Guid requesterUserId,
         Guid messageId,
         bool globally,

@@ -17,9 +17,11 @@ public partial class ChatPage : ContentPage
     private readonly ChatResponse _chat;
     private readonly Func<Guid, Task>? _openProfile;
     private bool _isActive, _windowActive;
+    private bool _messageMenuOpen, _sendingMessage;
     private int _lastVisibleIndex = -1;
     private Window? _window;
     private AttachmentPickerView? _attachmentPicker;
+    private CancellationTokenSource? _searchCancellation;
     public MusicViewModel? Music { get; private set; }
 
     public Guid CurrentUserId { get; }
@@ -81,6 +83,8 @@ public partial class ChatPage : ContentPage
         }
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         _sync.MessageReceived += OnMessageReceivedAsync;
+        _sync.MessagesReconciled += OnMessagesReconciledAsync;
+        _sync.MessageRemoved += OnMessageRemovedAsync;
         _sync.ReadPositionChanged += OnReadPositionChangedAsync;
         _sync.ReadPositionsLoaded += OnReadPositionsLoadedAsync;
         _sync.ConnectionStateChanged += OnConnectionStateChanged;
@@ -95,6 +99,7 @@ public partial class ChatPage : ContentPage
     protected override void OnDisappearing()
     {
         _isActive = _windowActive = false;
+        _searchCancellation?.Cancel();
         CloseAttachmentPicker();
         if (Music is not null) Music.TrackUpdated -= _viewModel.ApplyMusicTrack;
         _lastVisibleIndex = -1;
@@ -108,6 +113,8 @@ public partial class ChatPage : ContentPage
         _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         _sync.Stop();
         _sync.MessageReceived -= OnMessageReceivedAsync;
+        _sync.MessagesReconciled -= OnMessagesReconciledAsync;
+        _sync.MessageRemoved -= OnMessageRemovedAsync;
         _sync.ReadPositionChanged -= OnReadPositionChangedAsync;
         _sync.ReadPositionsLoaded -= OnReadPositionsLoadedAsync;
         _sync.ConnectionStateChanged -= OnConnectionStateChanged;
@@ -116,6 +123,10 @@ public partial class ChatPage : ContentPage
 
     private Task OnMessageReceivedAsync(Messenger.Contracts.Messages.MessageResponse message) =>
         MainThread.InvokeOnMainThreadAsync(() => _viewModel.Receive(message));
+    private Task OnMessagesReconciledAsync(IReadOnlyList<MessageResponse> messages) =>
+        MainThread.InvokeOnMainThreadAsync(() => _viewModel.ApplySnapshot(messages));
+    private Task OnMessageRemovedAsync(Guid messageId) =>
+        MainThread.InvokeOnMainThreadAsync(() => _viewModel.RemoveMessage(messageId));
     private Task OnReadPositionChangedAsync(ReadPositionChangedEvent position) =>
         MainThread.InvokeOnMainThreadAsync(() => _viewModel.ApplyReadPosition(position));
     private Task OnReadPositionsLoadedAsync(IReadOnlyList<ChatMemberResponse> members) =>
@@ -127,7 +138,46 @@ public partial class ChatPage : ContentPage
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(ChatViewModel.ReadSequence)) OnPropertyChanged(nameof(ReadSequence));
+        if (e.PropertyName == nameof(ChatViewModel.IsEditing)) UpdateComposer();
     }
+
+    private async void OnMessageActionsRequested(object? sender, MessageResponse message)
+    {
+        if (_messageMenuOpen || _sendingMessage) return;
+        _messageMenuOpen = true;
+        try
+        {
+            var choices = new List<string>();
+            if (_viewModel.CanEdit(message)) choices.Add("Редактировать");
+            if (message.DeletedAt is null) choices.Add("Переслать");
+            choices.Add("Удалить");
+            var action = await DisplayActionSheetAsync("Сообщение", "Отмена", null, choices.ToArray());
+            if (action == "Редактировать")
+            {
+                _viewModel.BeginEdit(message);
+                UpdateComposer();
+                ComposerEntry.Focus();
+            }
+            else if (action == "Переслать")
+            {
+                var api = Handler!.MauiContext!.Services.GetRequiredService<IConversationApi>();
+                await Navigation.PushAsync(new MessageForwardPage(message, api,
+                    async (target, clientId) => { await _viewModel.ForwardMessageAsync(message, target, clientId); }));
+            }
+            else if (action == "Удалить")
+            {
+                var canDeleteGlobally = message.SenderUserId == CurrentUserId && message.DeletedAt is null;
+                var deletion = await DisplayActionSheetAsync("Удалить сообщение?", "Отмена",
+                    canDeleteGlobally ? "Удалить для всех" : null, "Удалить у меня");
+                if (deletion is "Удалить для всех" or "Удалить у меня")
+                    await RunAsync(ct => _viewModel.DeleteMessageAsync(message, deletion == "Удалить для всех", ct));
+            }
+        }
+        catch (Exception exception) { await DisplayAlertAsync("Ошибка", exception.Message, "OK"); }
+        finally { _messageMenuOpen = false; }
+    }
+
+    private void OnCancelEditClicked(object? sender, EventArgs e) { _viewModel.CancelEdit(); UpdateComposer(); }
     private async void OnWindowActivated(object? sender, EventArgs e)
     {
         _windowActive = true;
@@ -168,7 +218,7 @@ public partial class ChatPage : ContentPage
     {
         SearchPanel.IsVisible = !SearchPanel.IsVisible;
         if (SearchPanel.IsVisible) SearchEntry.Focus();
-        else MessagesList.ItemsSource = _viewModel.Messages;
+        else { _searchCancellation?.Cancel(); MessagesList.ItemsSource = _viewModel.Messages; }
     }
     private void OnResetSearchClicked(object? sender, EventArgs e)
     {
@@ -242,6 +292,7 @@ public partial class ChatPage : ContentPage
 
     protected override bool OnBackButtonPressed()
     {
+        if (_viewModel.IsEditing) { _viewModel.CancelEdit(); UpdateComposer(); return true; }
         if (_attachmentPicker is null) return base.OnBackButtonPressed();
         CloseAttachmentPicker();
         return true;
@@ -282,26 +333,57 @@ public partial class ChatPage : ContentPage
     private void UpdateComposer()
     {
         if (SendButton is null) return;
-        var canSend = !string.IsNullOrWhiteSpace(ComposerEntry.Text) || _viewModel?.Media?.Attachments.Count > 0;
+        var editing = _viewModel?.IsEditing == true;
+        var canSend = editing || !string.IsNullOrWhiteSpace(ComposerEntry.Text) || _viewModel?.Media?.Attachments.Count > 0;
         SendButton.IsVisible = canSend;
-        SendButton.IsEnabled = _viewModel?.Media?.Attachments.All(item => item.State == UploadItemState.Uploaded) != false;
+        SendButton.IsEnabled = !_sendingMessage && (editing
+            ? _viewModel!.EditingMessage!.Type != "text" || !string.IsNullOrWhiteSpace(ComposerEntry.Text)
+            : _viewModel?.Media?.Attachments.All(item => item.State == UploadItemState.Uploaded) != false);
+        SemanticProperties.SetDescription(SendButton, editing ? "Сохранить изменения" : "Отправить сообщение");
         AudioButton.IsVisible = !canSend;
     }
 
     private async void OnSendClicked(object? sender, EventArgs e)
     {
-        await RunAsync(_viewModel.SendAsync);
-        MessagesList.ItemsSource = _viewModel.Messages;
+        if (_sendingMessage) return;
+        _sendingMessage = true;
         UpdateComposer();
-    }
-    private async void OnSearchClicked(object? sender, EventArgs e)
-    {
-        await MessagesLoading.LoadAsync(async () =>
+        try
         {
-            await RunAsync(ct => _viewModel.SearchAsync(SearchEntry.Text ?? string.Empty, ct));
+            await RunAsync(_viewModel.SendAsync);
+            MessagesList.ItemsSource = _viewModel.Messages;
+        }
+        finally { _sendingMessage = false; UpdateComposer(); }
+    }
+    private async void OnSearchClicked(object? sender, EventArgs e) => await SearchMessagesAsync(false);
+    private async void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_isActive && SearchPanel.IsVisible) await SearchMessagesAsync(true);
+    }
+    private async Task SearchMessagesAsync(bool debounce)
+    {
+        _searchCancellation?.Cancel();
+        _searchCancellation?.Dispose();
+        _searchCancellation = new();
+        var ct = _searchCancellation.Token;
+        var query = SearchEntry.Text ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            await _viewModel.SearchAsync(string.Empty, ct);
+            EmptyMessageLabel.Text = "Начните общение";
+            MessagesList.ItemsSource = _viewModel.Messages;
+            return;
+        }
+        try
+        {
+            if (debounce) await Task.Delay(300, ct);
+            await _viewModel.SearchAsync(query, ct);
+            ct.ThrowIfCancellationRequested();
             EmptyMessageLabel.Text = "Сообщения не найдены";
             MessagesList.ItemsSource = _viewModel.SearchResults;
-        }, replaceContent: true);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception exception) { if (!ct.IsCancellationRequested) await DisplayAlertAsync("Поиск", exception.Message, "OK"); }
     }
     private async void OnPinsClicked(object? sender, EventArgs e)
     {
@@ -315,11 +397,7 @@ public partial class ChatPage : ContentPage
     }
     private async void OnMediaClicked(object? sender, EventArgs e)
     {
-        await Navigation.PushAsync(new SharedMediaPage(async () =>
-        {
-            await _viewModel.LoadMediaAsync();
-            return _viewModel.SharedMedia.ToArray();
-        }));
+        await Navigation.PushAsync(new SharedMediaPage(_viewModel.ChatId, Handler!.MauiContext!.Services.GetRequiredService<IConversationApi>()));
     }
     private async void OnFileClicked(object? sender, EventArgs e) => await RunMediaAsync(MediaKind.File);
     private async void OnPhotoClicked(object? sender, EventArgs e) => await RunMediaAsync(MediaKind.Photo);

@@ -18,6 +18,46 @@ namespace Messenger.Api.IntegrationTests.Media;
 
 public sealed class UploadEndpointTests : IAsyncLifetime
 {
+    [Theory]
+    [InlineData("voice", "note.wav", "audio/wav")]
+    [InlineData("video_note", "note.mp4", "video/mp4")]
+    public async Task Recordings_round_trip_metadata_and_forward_to_an_authorized_member(string type, string name, string contentType)
+    {
+        await using var factory = await CreateFactoryAsync();
+        using var client = factory.CreateClient();
+        var author = await RegisterAsync(client, "+79990000641");
+        var recipient = await RegisterAsync(client, "+79990000642");
+        Authorize(client, author);
+        var bytes = type == "voice" ? "RIFFrecording-test"u8.ToArray() : new byte[] { 0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x6D, 0x70, 0x34, 0x32, 0, 0, 0, 0 };
+        var upload = await PostAsync<UploadSessionResponse>(client, "/api/uploads/", new CreateUploadRequest(name, contentType, bytes.Length,
+            Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()));
+        using (var transfer = new HttpClient())
+        using (var request = new HttpRequestMessage(HttpMethod.Put, upload.UploadUrl) { Content = new ByteArrayContent(bytes) })
+        {
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            (await transfer.SendAsync(request)).EnsureSuccessStatusCode();
+        }
+        var stored = await PostAsync<StoredObjectResponse>(client, $"/api/uploads/{upload.Id}/complete", new { });
+        var chat = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(recipient.UserId));
+        var recording = new SendMessageRequest(Guid.NewGuid(), type, null, [stored.Id], DurationMs: 2000, Waveform: [10, 50, 100]);
+        var sent = await PostAsync<MessageResponse>(client, $"/api/chats/{chat.Id}/messages", recording);
+        var retry = await PostAsync<MessageResponse>(client, $"/api/chats/{chat.Id}/messages", recording);
+        Assert.Equal(sent.Id, retry.Id);
+        Authorize(client, recipient);
+        var received = Assert.Single((await client.GetFromJsonAsync<MessagePageResponse>($"/api/chats/{chat.Id}/messages"))!.Items);
+        Assert.Equal(type, received.Type);
+        Assert.Equal(2000, received.DurationMs);
+        Assert.Equal(new byte[] { 10, 50, 100 }, received.Waveform);
+        Assert.Equal(stored.Id, Assert.Single(received.Attachments!).Id);
+        var forwarded = await PostAsync<MessageResponse>(client, $"/api/messages/{sent.Id}/forward", new ForwardMessageRequest(chat.Id, Guid.NewGuid()));
+        Assert.True(forwarded.IsForwarded);
+        Assert.Equal(received.DurationMs, forwarded.DurationMs);
+        Assert.Equal(received.Waveform, forwarded.Waveform);
+        Assert.Equal(stored.Id, Assert.Single(forwarded.Attachments!).Id);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync($"/api/chats/{chat.Id}/messages",
+            new SendMessageRequest(Guid.NewGuid(), type, null, DurationMs: 2000))).StatusCode);
+    }
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("messenger_media_tests").WithUsername("messenger").WithPassword("messenger-tests-only").Build();
     private readonly MinioContainer _minio = new MinioBuilder("messenger-minio:RELEASE.2025-10-15T17-29-55Z")

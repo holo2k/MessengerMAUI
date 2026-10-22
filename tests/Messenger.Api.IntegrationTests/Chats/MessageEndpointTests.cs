@@ -103,8 +103,8 @@ public sealed class MessageEndpointTests : IAsyncLifetime
         var search = await client.GetFromJsonAsync<MessagePageResponse>(
             $"/api/chats/{group.Id}/messages/search?query=%D1%82%D0%BE%D1%87%D0%BD%D0%BE%D0%B5");
         Assert.Equal(message.Id, Assert.Single(search!.Items).Id);
-        Assert.Empty((await client.GetFromJsonAsync<MessagePageResponse>(
-            $"/api/chats/{group.Id}/messages/search?query=%D1%82%D0%BE%D1%87%D0%BD"))!.Items);
+        Assert.Equal(message.Id, Assert.Single((await client.GetFromJsonAsync<MessagePageResponse>(
+            $"/api/chats/{group.Id}/messages/search?query=%D1%82%D0%BE%D1%87%D0%BD"))!.Items).Id);
 
         Assert.Equal(HttpStatusCode.NoContent,
             (await client.PutAsync($"/api/messages/{message.Id}/pin", null)).StatusCode);
@@ -151,6 +151,49 @@ public sealed class MessageEndpointTests : IAsyncLifetime
         Assert.Equal(chat.Id, restored.Id);
         Assert.Equal(sent.Id, restored.LastMessage?.Id);
         Assert.Equal("Диалог возвращён", restored.LastMessage?.Body);
+    }
+
+    [Fact]
+    public async Task Forward_requires_membership_in_both_chats_and_creates_an_independent_idempotent_copy()
+    {
+        await using var factory = await CreateFactoryAsync();
+        using var client = factory.CreateClient();
+        var author = await RegisterAsync(client, "+79990000441");
+        var recipient = await RegisterAsync(client, "+79990000442");
+        var third = await RegisterAsync(client, "+79990000443");
+        Authorize(client, author);
+        var sourceChat = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(recipient.UserId));
+        var source = await PostAsync<MessageResponse>(client, $"/api/chats/{sourceChat.Id}/messages",
+            new SendMessageRequest(Guid.NewGuid(), "text", "Оригинальный текст"));
+        Authorize(client, recipient);
+        var targetChat = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(third.UserId));
+        var request = new ForwardMessageRequest(targetChat.Id, Guid.NewGuid());
+        var forwarded = await PostAsync<MessageResponse>(client, $"/api/messages/{source.Id}/forward", request);
+        var retry = await PostAsync<MessageResponse>(client, $"/api/messages/{source.Id}/forward", request);
+        Assert.Equal(forwarded.Id, retry.Id);
+        Assert.NotEqual(source.Id, forwarded.Id);
+        Assert.True(forwarded.IsForwarded);
+        Assert.Equal(recipient.UserId, forwarded.SenderUserId);
+
+        Authorize(client, author);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync($"/api/messages/{source.Id}/forward",
+            new ForwardMessageRequest(targetChat.Id, Guid.NewGuid()))).StatusCode);
+        (await client.PatchAsJsonAsync($"/api/messages/{source.Id}", new EditMessageRequest("Изменённый текст"))).EnsureSuccessStatusCode();
+        (await client.DeleteAsync($"/api/messages/{source.Id}?globally=true")).EnsureSuccessStatusCode();
+        Authorize(client, third);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync($"/api/messages/{source.Id}/forward",
+            new ForwardMessageRequest(targetChat.Id, Guid.NewGuid()))).StatusCode);
+        var copy = await client.GetFromJsonAsync<MessageResponse>($"/api/messages/{forwarded.Id}");
+        Assert.Equal("Оригинальный текст", copy!.Body);
+        Assert.Null(copy.DeletedAt);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PatchAsJsonAsync($"/api/messages/{forwarded.Id}", new EditMessageRequest("Чужая правка"))).StatusCode);
+        (await client.DeleteAsync($"/api/messages/{forwarded.Id}?globally=false")).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/messages/{forwarded.Id}?globally=false")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/messages/{forwarded.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync($"/api/messages/{forwarded.Id}/forward",
+            new ForwardMessageRequest(targetChat.Id, Guid.NewGuid()))).StatusCode);
+        Authorize(client, recipient);
+        Assert.Equal(forwarded.Id, (await client.GetFromJsonAsync<MessageResponse>($"/api/messages/{forwarded.Id}"))!.Id);
     }
 
     private async Task<MessengerApiFactory> CreateFactoryAsync()

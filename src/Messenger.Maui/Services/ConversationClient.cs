@@ -8,6 +8,10 @@ namespace Messenger.Maui.Services;
 
 public interface IConversationApi
 {
+    Task<MessageResponse> GetMessageAsync(Guid messageId, CancellationToken ct = default);
+    Task<MessageResponse> EditMessageAsync(Guid messageId, string body, CancellationToken ct = default);
+    Task DeleteMessageAsync(Guid messageId, bool globally, CancellationToken ct = default);
+    Task<MessageResponse> ForwardMessageAsync(Guid messageId, Guid targetChatId, Guid clientId, CancellationToken ct = default);
     Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default);
     Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default);
     Task<IReadOnlyList<ChatMemberResponse>> GetChatMembersAsync(Guid chatId, CancellationToken ct = default);
@@ -38,8 +42,38 @@ public interface IPhoneDialer
 
 public sealed class ConversationClient(HttpClient httpClient) : IConversationApi
 {
-    public async Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default) =>
-        (await httpClient.GetFromJsonAsync<ChatPageResponse>("api/chats?limit=100", ct))?.Items ?? [];
+    public async Task<MessageResponse> GetMessageAsync(Guid messageId, CancellationToken ct = default) =>
+        await httpClient.GetFromJsonAsync<MessageResponse>($"api/messages/{messageId}", ct)
+            ?? throw new InvalidDataException("Missing message response.");
+
+    public async Task<MessageResponse> EditMessageAsync(Guid messageId, string body, CancellationToken ct = default)
+    {
+        using var response = await httpClient.PatchAsJsonAsync($"api/messages/{messageId}", new EditMessageRequest(body), ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<MessageResponse>(ct) ?? throw new InvalidDataException("Missing message response.");
+    }
+
+    public async Task DeleteMessageAsync(Guid messageId, bool globally, CancellationToken ct = default) =>
+        await EnsureAsync(await httpClient.DeleteAsync($"api/messages/{messageId}?globally={globally.ToString().ToLowerInvariant()}", ct));
+
+    public Task<MessageResponse> ForwardMessageAsync(Guid messageId, Guid targetChatId, Guid clientId, CancellationToken ct = default) =>
+        PostAsync<MessageResponse>($"api/messages/{messageId}/forward", new ForwardMessageRequest(targetChatId, clientId), ct);
+
+    public async Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default)
+    {
+        var chats = new List<ChatResponse>();
+        string? cursor = null;
+        var cursors = new HashSet<string>();
+        do
+        {
+            var path = "api/chats?limit=100" + (cursor is null ? string.Empty : $"&cursor={Uri.EscapeDataString(cursor)}");
+            var page = await httpClient.GetFromJsonAsync<ChatPageResponse>(path, ct) ?? throw new InvalidDataException("Missing chat page.");
+            chats.AddRange(page.Items);
+            cursor = page.NextCursor;
+            if (cursor is not null && !cursors.Add(cursor)) throw new InvalidDataException("Invalid chat cursor.");
+        } while (cursor is not null);
+        return chats;
+    }
 
     public async Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default) =>
         await httpClient.GetFromJsonAsync<ChatResponse>($"api/chats/{chatId}", ct)

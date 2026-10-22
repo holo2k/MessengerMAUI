@@ -10,6 +10,7 @@ public sealed class ChatListSyncService(
     private bool _started;
 
     public event Func<ChatResponse, MessageCreatedEvent, Task>? ChatChanged;
+    public event Func<ChatResponse, Task>? SummaryChanged;
     public event Func<Task>? ReloadRequested;
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -21,6 +22,9 @@ public sealed class ChatListSyncService(
 
         _started = true;
         realtime.MessageCreated += OnMessageCreatedAsync;
+        realtime.MessageUpdated += OnMessageUpdatedAsync;
+        realtime.MessageDeleted += OnMessageDeletedAsync;
+        realtime.MessageHidden += OnMessageHiddenAsync;
         realtime.Reconnected += OnReconnectedAsync;
         try
         {
@@ -51,6 +55,9 @@ public sealed class ChatListSyncService(
         }
 
         realtime.MessageCreated -= OnMessageCreatedAsync;
+        realtime.MessageUpdated -= OnMessageUpdatedAsync;
+        realtime.MessageDeleted -= OnMessageDeletedAsync;
+        realtime.MessageHidden -= OnMessageHiddenAsync;
         realtime.Reconnected -= OnReconnectedAsync;
         _started = false;
     }
@@ -72,4 +79,17 @@ public sealed class ChatListSyncService(
     }
 
     private Task OnReconnectedAsync() => ReloadRequested?.Invoke() ?? Task.CompletedTask;
+    private Task OnMessageUpdatedAsync(MessageUpdatedEvent message) => UpdateSummaryAsync(message.ChatId);
+    private Task OnMessageDeletedAsync(MessageDeletedEvent message) => UpdateSummaryAsync(message.ChatId);
+    private Task OnMessageHiddenAsync(MessageHiddenEvent message) => UpdateSummaryAsync(message.ChatId);
+
+    private async Task UpdateSummaryAsync(Guid chatId)
+    {
+        try
+        {
+            var chat = await api.GetChatAsync(chatId);
+            if (_started && SummaryChanged is not null) await SummaryChanged(chat);
+        }
+        catch { /* A later page load reconciles the summary. */ }
+    }
 }

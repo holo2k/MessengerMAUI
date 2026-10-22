@@ -7,6 +7,7 @@ using Messenger.Contracts.Music;
 using Messenger.Maui.Features.Music;
 using Microsoft.Extensions.DependencyInjection;
 using Messenger.Maui.Controls;
+using Plugin.Maui.Audio;
 
 namespace Messenger.Maui.Features.Chats;
 
@@ -22,6 +23,11 @@ public partial class ChatPage : ContentPage
     private Window? _window;
     private AttachmentPickerView? _attachmentPicker;
     private CancellationTokenSource? _searchCancellation;
+    private ChatRecordingViewModel? _recording;
+    private IDispatcherTimer? _recordTimer;
+    private RecordedChatNote? _displayedRecording;
+    private bool _recordPointerDown;
+    private readonly List<byte> _recordLevels = [];
     public MusicViewModel? Music { get; private set; }
 
     public Guid CurrentUserId { get; }
@@ -61,6 +67,20 @@ public partial class ChatPage : ContentPage
         base.OnAppearing();
         if (_isActive) return;
         _isActive = _windowActive = true;
+        if (_recording is null)
+        {
+            var services = Handler!.MauiContext!.Services;
+            _recording = new ChatRecordingViewModel(_viewModel.ChatId,
+                new NativeChatNoteRecorder(services.GetRequiredService<IAudioManager>(), RecordingCameraHost),
+                services.GetRequiredService<IMediaUploader>(), services.GetRequiredService<IConversationApi>());
+            _recording.PropertyChanged += OnRecordingChanged;
+            _recording.Sent += message => MainThread.BeginInvokeOnMainThread(() => _viewModel.Receive(message));
+        }
+        _recordTimer?.Stop();
+        _recordTimer = Dispatcher.CreateTimer();
+        _recordTimer.Interval = TimeSpan.FromMilliseconds(100);
+        _recordTimer.Tick += async (_, _) => { if (_recording is not null) await _recording.TickAsync(); };
+        _recordTimer.Start();
         Music = (Shell.Current as AppShell)?.Music;
         if (Music is not null)
         {
@@ -99,6 +119,10 @@ public partial class ChatPage : ContentPage
     protected override void OnDisappearing()
     {
         _isActive = _windowActive = false;
+        _recordPointerDown = false;
+        _recordTimer?.Stop();
+        ChatNotePlayback.StopAll();
+        if (_recording is { IsActive: true, IsSending: false }) _ = _recording.CancelAsync();
         _searchCancellation?.Cancel();
         CloseAttachmentPicker();
         if (Music is not null) Music.TrackUpdated -= _viewModel.ApplyMusicTrack;
@@ -184,7 +208,12 @@ public partial class ChatPage : ContentPage
         await MarkVisibleMessagesReadAsync();
         if (_attachmentPicker is { } picker) await picker.RefreshOnResumeAsync();
     }
-    private void OnWindowDeactivated(object? sender, EventArgs e) => _windowActive = false;
+    private async void OnWindowDeactivated(object? sender, EventArgs e)
+    {
+        _windowActive = false;
+        ChatNotePlayback.StopAll();
+        if (_recording?.IsCapturing == true) await _recording.StopForReviewAsync();
+    }
     private void OnMessagesLoaded(object? sender, EventArgs e) => Dispatcher.Dispatch(ScrollToLatestMessage);
     private void ScrollToLatestMessage()
     {
@@ -292,6 +321,7 @@ public partial class ChatPage : ContentPage
 
     protected override bool OnBackButtonPressed()
     {
+        if (_recording?.IsActive == true) { if (!_recording.IsSending) _ = _recording.CancelAsync(); return true; }
         if (_viewModel.IsEditing) { _viewModel.CancelEdit(); UpdateComposer(); return true; }
         if (_attachmentPicker is null) return base.OnBackButtonPressed();
         CloseAttachmentPicker();
@@ -314,6 +344,7 @@ public partial class ChatPage : ContentPage
 
     private async void OnMusicTrackOpened(object? sender, MusicTrackResponse track) => await RunAsync(async ct =>
     {
+        ChatNotePlayback.StopAll();
         if (Music is null) return;
         if (Music.CurrentTrack?.Id != track.Id) await PlayChatTrackAsync(track, ct);
         await MusicPlayerPage.OpenAsync(Navigation, Music);
@@ -321,6 +352,7 @@ public partial class ChatPage : ContentPage
 
     private async void OnMusicPlaybackRequested(object? sender, MusicTrackResponse track) => await RunAsync(async ct =>
     {
+        ChatNotePlayback.StopAll();
         if (Music is null) return;
         if (Music.CurrentTrack?.Id != track.Id) await PlayChatTrackAsync(track, ct);
         else if (Music.HasPlaybackError) await Music.RetryAsync(ct);
@@ -335,12 +367,91 @@ public partial class ChatPage : ContentPage
         if (SendButton is null) return;
         var editing = _viewModel?.IsEditing == true;
         var canSend = editing || !string.IsNullOrWhiteSpace(ComposerEntry.Text) || _viewModel?.Media?.Attachments.Count > 0;
-        SendButton.IsVisible = canSend;
+        var recording = _recording?.IsActive == true;
+        SendButton.IsVisible = canSend && !recording;
         SendButton.IsEnabled = !_sendingMessage && (editing
             ? _viewModel!.EditingMessage!.Type != "text" || !string.IsNullOrWhiteSpace(ComposerEntry.Text)
             : _viewModel?.Media?.Attachments.All(item => item.State == UploadItemState.Uploaded) != false);
         SemanticProperties.SetDescription(SendButton, editing ? "Сохранить изменения" : "Отправить сообщение");
-        AudioButton.IsVisible = !canSend;
+        AudioButton.IsVisible = _recordPointerDown || !canSend && (!recording || _recording?.State is ChatRecordingState.Starting or ChatRecordingState.Recording);
+        AttachButton.IsVisible = ComposerField.IsVisible = CameraButton.IsVisible = !recording;
+        UpdateRecordingUi();
+    }
+
+    private void OnRecordModeTapped(object? sender, EventArgs e) { _recording?.ToggleMode(); UpdateComposer(); }
+    private async void OnRecordHoldStarted(object? sender, EventArgs e)
+    {
+        if (!_isActive || _sendingMessage || _viewModel.IsEditing || _viewModel.Media?.Attachments.Count > 0 || _recording is null) return;
+        _recordPointerDown = true;
+        _recordLevels.Clear();
+        ComposerEntry.Unfocus(); CloseAttachmentPicker(); ChatNotePlayback.StopAll();
+        if (Music?.IsPlaying == true) Music.TogglePause();
+        await _recording.StartAsync();
+        if (!_isActive) await _recording.CancelAsync();
+        UpdateComposer();
+        if (_isActive && _recording.State == ChatRecordingState.Idle && _recording.Error is { } error)
+            await DisplayAlertAsync("Запись сообщения", error, "OK");
+    }
+    private async void OnRecordDragged(object? sender, RecordingDragEventArgs e) { if (_recording is not null) await _recording.DragAsync(e.X, e.Y); }
+    private async void OnRecordReleased(object? sender, EventArgs e)
+    {
+        _recordPointerDown = false;
+        if (_recording is not null) await _recording.ReleaseAsync();
+        UpdateComposer();
+        if (_isActive && _recording is { State: ChatRecordingState.Idle, Error: { } error }) await DisplayAlertAsync("Запись сообщения", error, "OK");
+    }
+    private async void OnRecordCanceled(object? sender, EventArgs e)
+    {
+        _recordPointerDown = false;
+        if (_recording is { IsLocked: false, IsSending: false }) await _recording.CancelAsync();
+        UpdateComposer();
+    }
+    private async void OnDiscardRecording(object? sender, EventArgs e)
+    { ChatNotePlayback.StopAll(); if (_recording is not null) await _recording.CancelAsync(); }
+    private async void OnStopRecording(object? sender, EventArgs e) { if (_recording is not null) await _recording.StopForReviewAsync(); }
+    private async void OnSendRecording(object? sender, EventArgs e)
+    { ChatNotePlayback.StopAll(); if (_recording is not null) await _recording.SendAsync(); }
+    private void OnRecordingChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ChatRecordingViewModel.Level) && _recording is not null)
+        {
+            _recordLevels.Add(_recording.Level);
+            if (_recordLevels.Count > 48) _recordLevels.RemoveAt(0);
+        }
+        UpdateComposer();
+    }
+    private void UpdateRecordingUi()
+    {
+        if (_recording is not { } recording) return;
+        RecordingOverlay.IsVisible = recording.IsActive;
+        RecordingStatus.IsVisible = recording.State is ChatRecordingState.Starting or ChatRecordingState.Recording || recording.IsLocked && _recordPointerDown;
+        RecordingActions.IsVisible = (recording.IsLocked || recording.IsReview || recording.IsSending) && !_recordPointerDown;
+        RecordingActions.IsEnabled = !recording.IsSending;
+        RecordingUploadProgress.IsVisible = recording.IsSending;
+        RecordingUploadProgress.Progress = recording.UploadProgress;
+        RecordingCameraBorder.IsVisible = recording.ShowCamera;
+        RecordingLockHint.IsVisible = recording.State == ChatRecordingState.Recording;
+        StopRecordingButton.IsVisible = recording.IsCapturing;
+        RecordingTime.Text = "● " + recording.DurationText;
+        RecordingActionTime.Text = recording.IsSending ? "Отправка…" : recording.DurationText;
+        RecordingOverlayTime.Text = recording.State == ChatRecordingState.Starting ? "Подготовка…" : recording.DurationText;
+        RecordingHint.Text = recording.IsReview ? "Проверьте запись и нажмите отправить"
+            : recording.IsLocked ? "Запись закреплена — можно отпустить кнопку"
+            : recording.IsSending ? "Отправка сообщения…" : "Отпустите, чтобы отправить · вверх — закрепить";
+        RecordingError.Text = recording.Error;
+        RecordingError.IsVisible = !string.IsNullOrWhiteSpace(recording.Error);
+        RecordingLimitProgress.Progress = recording.LimitProgress;
+        RecordingDraftHost.IsVisible = recording.ShowDraft;
+        RecordingDraftHost.IsEnabled = !recording.IsSending;
+        if (!ReferenceEquals(_displayedRecording, recording.Draft))
+        {
+            _displayedRecording = recording.Draft;
+            RecordingDraftHost.Content = recording.Draft is { } draft ? new ChatNoteView(draft) : null;
+        }
+        RecordingLiveWave.IsVisible = !recording.IsVideo && recording.IsCapturing;
+        RecordingLiveWave.Samples = _recordLevels.ToArray(); RecordingLiveWave.Invalidate();
+        AudioButton.Source = recording.IsVideo ? "icon_video_note.png" : "icon_mic.png";
+        SemanticProperties.SetDescription(AudioButton, recording.IsVideo ? "Удерживайте для записи кружочка; нажмите для голосового" : "Удерживайте для записи голосового; нажмите для кружочка");
     }
 
     private async void OnSendClicked(object? sender, EventArgs e)

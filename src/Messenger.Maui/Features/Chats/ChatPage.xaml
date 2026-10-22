@@ -79,13 +79,41 @@
                 <Label Text="Редактирование сообщения" FontSize="12" TextColor="{StaticResource Primary}" VerticalOptions="Center" />
                 <Button Grid.Column="1" Text="Отмена" FontSize="12" Clicked="OnCancelEditClicked" Padding="8,0" />
             </Grid>
-            <ImageButton Grid.Row="1" Source="icon_plus.png" Clicked="OnAttachClicked" SemanticProperties.Description="Прикрепить вложение" IsEnabled="{Binding IsEditing, Converter={StaticResource DisplayValue}, ConverterParameter=inverse}" />
-            <Border Grid.Row="1" Grid.Column="1" Stroke="{StaticResource Separator}" StrokeThickness="1" StrokeShape="RoundRectangle 18" BackgroundColor="White" Padding="12,0">
+            <ImageButton x:Name="AttachButton" Grid.Row="1" Source="icon_plus.png" Clicked="OnAttachClicked" SemanticProperties.Description="Прикрепить вложение" IsEnabled="{Binding IsEditing, Converter={StaticResource DisplayValue}, ConverterParameter=inverse}" />
+            <Border x:Name="ComposerField" Grid.Row="1" Grid.Column="1" Stroke="{StaticResource Separator}" StrokeThickness="1" StrokeShape="RoundRectangle 18" BackgroundColor="White" Padding="12,0">
                 <Entry x:Name="ComposerEntry" Text="{Binding ComposerText}" Placeholder="Сообщение" MinimumHeightRequest="36" TextChanged="OnComposerChanged" />
             </Border>
             <ImageButton x:Name="CameraButton" Grid.Row="1" Grid.Column="2" Source="icon_camera.png" Clicked="OnPhotoClicked" SemanticProperties.Description="Добавить фото" IsEnabled="{Binding IsEditing, Converter={StaticResource DisplayValue}, ConverterParameter=inverse}" />
-            <ImageButton x:Name="AudioButton" Grid.Row="1" Grid.Column="3" Source="icon_mic.png" Clicked="OnAudioClicked" SemanticProperties.Description="Добавить аудио" />
+            <ui:NoteRecordButton x:Name="AudioButton" Grid.Row="1" Grid.Column="3" Source="icon_mic.png" ModeTapped="OnRecordModeTapped"
+                                 HoldStarted="OnRecordHoldStarted" HoldDragged="OnRecordDragged" HoldReleased="OnRecordReleased" HoldCanceled="OnRecordCanceled"
+                                 SemanticProperties.Description="Удерживайте для записи голосового; нажмите для переключения на кружочек" />
             <ImageButton x:Name="SendButton" Grid.Row="1" Grid.Column="3" Source="icon_send.png" Clicked="OnSendClicked" IsVisible="False" SemanticProperties.Description="Отправить сообщение" />
+            <Grid x:Name="RecordingStatus" Grid.Row="1" Grid.ColumnSpan="3" ColumnDefinitions="Auto,*" Padding="12,0" ColumnSpacing="12" IsVisible="False">
+                <Label x:Name="RecordingTime" TextColor="#ED4242" VerticalOptions="Center" />
+                <Label Grid.Column="1" Text="← Сдвиньте для отмены" FontSize="12" TextColor="{StaticResource TextSecondary}" VerticalOptions="Center" />
+            </Grid>
+            <Grid x:Name="RecordingActions" Grid.Row="1" Grid.ColumnSpan="4" ColumnDefinitions="44,*,44,44" IsVisible="False">
+                <Button Text="✕" Clicked="OnDiscardRecording" SemanticProperties.Description="Удалить запись" />
+                <Label x:Name="RecordingActionTime" Grid.Column="1" VerticalOptions="Center" TextColor="{StaticResource Primary}" />
+                <Button x:Name="StopRecordingButton" Grid.Column="2" Text="■" Clicked="OnStopRecording" SemanticProperties.Description="Остановить и прослушать запись" />
+                <ImageButton x:Name="SendRecordingButton" Grid.Column="3" Source="icon_send.png" Clicked="OnSendRecording" SemanticProperties.Description="Отправить запись" />
+            </Grid>
+            <ProgressBar x:Name="RecordingUploadProgress" Grid.ColumnSpan="4" IsVisible="False" />
+        </Grid>
+        <Grid x:Name="RecordingOverlay" Grid.Row="3" ZIndex="20" IsVisible="False">
+            <BoxView Color="#AAEEF2F6" />
+            <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="16" Padding="16">
+                <Border x:Name="RecordingCameraBorder" StrokeShape="Ellipse" StrokeThickness="3" Stroke="{StaticResource Primary}" WidthRequest="300" HeightRequest="300" IsVisible="False">
+                    <ContentView x:Name="RecordingCameraHost" WidthRequest="300" HeightRequest="300" />
+                </Border>
+                <ContentView x:Name="RecordingDraftHost" />
+                <ui:NoteWaveformView x:Name="RecordingLiveWave" WidthRequest="260" HeightRequest="40" />
+                <Label x:Name="RecordingOverlayTime" FontSize="28" HorizontalTextAlignment="Center" />
+                <Label x:Name="RecordingHint" FontSize="13" HorizontalTextAlignment="Center" TextColor="{StaticResource TextSecondary}" />
+                <ProgressBar x:Name="RecordingLimitProgress" Progress="0" WidthRequest="260" />
+                <Label x:Name="RecordingError" FontSize="13" TextColor="{StaticResource Danger}" MaxLines="4" HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
+            <Label x:Name="RecordingLockHint" Text="↑&#10;🔒" HorizontalOptions="End" VerticalOptions="End" Margin="0,0,12,16" FontSize="24" HorizontalTextAlignment="Center" />
         </Grid>
         <Grid x:Name="AttachmentOverlay" Grid.RowSpan="6" ZIndex="30" IsVisible="False" SizeChanged="OnAttachmentOverlaySizeChanged">
             <BoxView Color="#66000000"><BoxView.GestureRecognizers><TapGestureRecognizer Tapped="OnAttachmentBackdropTapped" /></BoxView.GestureRecognizers></BoxView>

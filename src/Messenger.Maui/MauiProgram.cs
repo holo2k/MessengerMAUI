@@ -17,6 +17,7 @@ public static class MauiProgram
 		var builder = MauiApp.CreateBuilder();
 		builder
 			.UseMauiApp<App>()
+			.ConfigureMauiHandlers(handlers => handlers.AddHandler<Controls.MessageBubble, Controls.MessageBubbleHandler>())
 			.AddAudio()
 			.ConfigureFonts(fonts =>
 			{
@@ -77,6 +78,7 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IMessageAttachmentClient>(services => new MessageAttachmentClient(
 			services.GetRequiredService<HttpClient>(), new HttpClient()));
 		builder.Services.AddTransient<MediaComposerViewModel>();
+		builder.Services.AddTransient<MessageForwarder>();
 		builder.Services.AddSingleton<IMusicApi, MusicApiClient>();
 		builder.Services.AddSingleton<IAsyncDelay, AsyncDelay>();
 		builder.Services.AddSingleton<IMusicDownloadService>(services => new MusicDownloadService(

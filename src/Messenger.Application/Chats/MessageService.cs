@@ -5,6 +5,7 @@ using Messenger.Domain.Common;
 using Messenger.Application.Music;
 using Messenger.Domain.Music;
 using Messenger.Domain.Media;
+using Messenger.Contracts.Messages;
 
 namespace Messenger.Application.Chats;
 
@@ -16,8 +17,34 @@ public sealed partial class MessageService(
     IClock clock,
     IMusicStore music) : IMessageService, IMessageSearchService
 {
-    public async Task<MessageView> GetAsync(Guid requesterUserId, Guid messageId, CancellationToken cancellationToken = default) =>
-        await ToViewAsync(await RequireMessageForMemberAsync(requesterUserId, messageId, cancellationToken), cancellationToken);
+    public async Task<MessageView> GetAsync(Guid requesterUserId, Guid messageId, CancellationToken cancellationToken = default)
+    {
+        var message = await RequireMessageForMemberAsync(requesterUserId, messageId, cancellationToken);
+        if (await messageStore.IsHiddenAsync(messageId, requesterUserId, cancellationToken))
+            throw new MessageRuleException(MessageRuleError.NotFound);
+        return await ToViewAsync(message, cancellationToken);
+    }
+
+    public async Task<MessageView> ForwardAsync(Guid senderUserId, Guid messageId, Guid targetChatId, Guid clientMessageId,
+        CancellationToken cancellationToken = default)
+    {
+        await RequireMemberAsync(targetChatId, senderUserId, cancellationToken);
+        var existing = await messageStore.FindByClientIdAsync(senderUserId, clientMessageId, cancellationToken);
+        if (existing is not null)
+        {
+            if (existing.ChatId != targetChatId || !existing.IsForwarded)
+                throw new MessageRuleException(MessageRuleError.InvalidBody);
+            return await ToViewAsync(existing, cancellationToken);
+        }
+        var source = await GetAsync(senderUserId, messageId, cancellationToken);
+        if (source.Message.DeletedAt is not null ||
+            source.Message.Kind == MessageKind.Music && source.MusicTrack is null ||
+            source.Message.Kind is MessageKind.Image or MessageKind.Video or MessageKind.Audio or MessageKind.File && source.Attachments is not { Count: > 0 })
+            throw new MessageRuleException(MessageRuleError.NotFound);
+        return await SendCoreAsync(senderUserId, targetChatId, clientMessageId, source.Message.Kind, source.Body,
+            source.Message.MusicTrackId, cancellationToken, isForwarded: true,
+            attachmentIds: source.Attachments?.Select(value => value.Id).ToArray());
+    }
 
     public Task<MessageView> SendMusicAsync(Guid senderUserId, Guid chatId, Guid clientMessageId, Guid trackId,
         CancellationToken cancellationToken = default) =>
@@ -33,7 +60,8 @@ public sealed partial class MessageService(
         SendCoreAsync(senderUserId, chatId, clientMessageId, kind, body, null, cancellationToken);
 
     private async Task<MessageView> SendCoreAsync(Guid senderUserId, Guid chatId, Guid clientMessageId,
-        MessageKind kind, string? body, Guid? trackId, CancellationToken cancellationToken)
+        MessageKind kind, string? body, Guid? trackId, CancellationToken cancellationToken,
+        bool isForwarded = false, IReadOnlyList<Guid>? attachmentIds = null)
     {
         await RequireMemberAsync(chatId, senderUserId, cancellationToken);
         var existing = await messageStore.FindByClientIdAsync(senderUserId, clientMessageId, cancellationToken);
@@ -65,7 +93,10 @@ public sealed partial class MessageService(
             Guid.NewGuid(), chatId, senderUserId, chat.NextMessageSequence(clock.UtcNow), clientMessageId,
             kind, encrypted.Ciphertext, encrypted.Nonce, encrypted.Tag, encrypted.KeyVersion, clock.UtcNow);
         if (track is not null) message.AttachMusic(track.Id);
+        if (isForwarded) message.MarkForwarded();
         await messageStore.AddMessageAsync(message, SearchTokens(message.Id, normalizedBody), cancellationToken);
+        if (attachmentIds is { Count: > 0 })
+            await messageStore.AddAttachmentsAsync(message.Id, attachmentIds, cancellationToken);
         if (chat.Type == ChatType.Direct)
         {
             foreach (var member in await chatStore.ListMembersAsync(chatId, cancellationToken))
@@ -77,7 +108,7 @@ public sealed partial class MessageService(
             }
         }
         await chatStore.SaveChangesAsync(cancellationToken);
-        return new MessageView(message, normalizedBody, false, track);
+        return isForwarded ? await ToViewAsync(message, cancellationToken) : new MessageView(message, normalizedBody, false, track);
     }
 
     public async Task<IReadOnlyList<MessageView>> ListAsync(
@@ -99,12 +130,10 @@ public sealed partial class MessageService(
         string body,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            throw new MessageRuleException(MessageRuleError.InvalidBody);
-        }
         var message = await RequireMessageForMemberAsync(requesterUserId, messageId, cancellationToken);
-        if (message.Kind == MessageKind.Music) throw new MessageRuleException(MessageRuleError.InvalidBody);
+        if (message.Kind == MessageKind.Music || message.Kind == MessageKind.Text && string.IsNullOrWhiteSpace(body))
+            throw new MessageRuleException(MessageRuleError.InvalidBody);
+        body ??= string.Empty;
         var encrypted = cipher.Encrypt(body);
         message.Edit(requesterUserId, encrypted.Ciphertext, encrypted.Nonce, encrypted.Tag, encrypted.KeyVersion, clock.UtcNow);
         await messageStore.ReplaceSearchTokensAsync(message.Id, SearchTokens(message.Id, body), cancellationToken);
@@ -112,25 +141,27 @@ public sealed partial class MessageService(
         return await ToViewAsync(message, cancellationToken);
     }
 
-    public async Task DeleteAsync(
+    public async Task<Message> DeleteAsync(
         Guid requesterUserId,
         Guid messageId,
         bool globally,
         CancellationToken cancellationToken = default)
     {
+        var message = await RequireMessageForMemberAsync(requesterUserId, messageId, cancellationToken);
         if (!globally)
         {
             await HideAsync(requesterUserId, messageId, cancellationToken);
-            return;
+            return message;
         }
-        var message = await RequireMessageForMemberAsync(requesterUserId, messageId, cancellationToken);
         message.DeleteGlobally(requesterUserId, clock.UtcNow);
         await chatStore.SaveChangesAsync(cancellationToken);
+        return message;
     }
 
     public async Task HideAsync(Guid requesterUserId, Guid messageId, CancellationToken cancellationToken = default)
     {
         var message = await RequireMessageForMemberAsync(requesterUserId, messageId, cancellationToken);
+        if (await messageStore.IsHiddenAsync(messageId, requesterUserId, cancellationToken)) return;
         await messageStore.AddHiddenAsync(new HiddenMessage(message.Id, requesterUserId, clock.UtcNow), cancellationToken);
         await chatStore.SaveChangesAsync(cancellationToken);
     }
@@ -169,7 +200,7 @@ public sealed partial class MessageService(
         foreach (var pin in pins)
         {
             var message = await messageStore.FindMessageAsync(pin.MessageId, cancellationToken);
-            if (message is not null)
+            if (message is { DeletedAt: null } && !await messageStore.IsHiddenAsync(message.Id, requesterUserId, cancellationToken))
             {
                 messages.Add(message);
             }
@@ -185,14 +216,25 @@ public sealed partial class MessageService(
         CancellationToken cancellationToken = default)
     {
         await RequireMemberAsync(chatId, requesterUserId, cancellationToken);
-        var tokens = NormalizeWords(query).Select(blindIndex.Compute).ToArray();
-        if (tokens.Length == 0)
+        if (string.IsNullOrWhiteSpace(query)) return [];
+        var matches = new List<Message>();
+        var before = long.MaxValue;
+        var take = Math.Clamp(limit, 1, 100);
+        // Substrings cannot be looked up with whole-word blind hashes. Decrypt authorized
+        // candidates in bounded batches, keeping the database free of plaintext search data.
+        while (matches.Count < take)
         {
-            return [];
+            var batch = await messageStore.ListSearchCandidatesAsync(chatId, requesterUserId, before, 100, cancellationToken);
+            foreach (var message in batch)
+            {
+                var body = cipher.Decrypt(new EncryptedValue(message.BodyCiphertext, message.BodyNonce, message.BodyTag, message.BodyKeyVersion));
+                if (MessageTextSearch.Matches(body, query)) matches.Add(message);
+                if (matches.Count == take) break;
+            }
+            if (batch.Count < 100) break;
+            before = batch[^1].Sequence;
         }
-        var messages = await messageStore.SearchMessagesAsync(
-            chatId, requesterUserId, tokens, Math.Clamp(limit, 1, 100), cancellationToken);
-        return await ToViewsAsync(messages, cancellationToken);
+        return await ToViewsAsync(matches, cancellationToken);
     }
 
     private async Task<ChatMember> RequireMemberAsync(Guid chatId, Guid userId, CancellationToken cancellationToken)

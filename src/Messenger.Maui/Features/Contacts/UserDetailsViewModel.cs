@@ -24,6 +24,7 @@ public sealed class UserDetailsViewModel(
     public string? Bio => _user?.Bio;
     public string? AvatarObjectId => _user?.AvatarObjectId;
     public bool CanEdit => _contact is not null;
+    public bool CanAdd => _user is not null && _contact is null;
     public bool CanCall => !string.IsNullOrWhiteSpace(Phone);
     public bool IsMuted => _contact?.IsMuted ?? false;
 
@@ -75,6 +76,7 @@ public sealed class UserDetailsViewModel(
         OnPropertyChanged(nameof(Bio));
         OnPropertyChanged(nameof(AvatarObjectId));
         OnPropertyChanged(nameof(CanEdit));
+        OnPropertyChanged(nameof(CanAdd));
         OnPropertyChanged(nameof(CanCall));
         OnPropertyChanged(nameof(IsMuted));
     }

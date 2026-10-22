@@ -64,6 +64,11 @@ public partial class ContactsPage : ContentPage
     }
 
     private Task ShowContactAsync(ContactResponse contact) => ShowUserAsync(contact.UserId);
+    private async void OnAddContactClicked(object? sender, EventArgs e)
+    {
+        OnCancelSearchClicked(sender, e);
+        await Navigation.PushAsync(new AddContactPage(_api));
+    }
 
     private Task ShowUserAsync(Guid userId) =>
         Navigation.PushAsync(new ContactDetailsPage(
@@ -75,7 +80,7 @@ public partial class ContactsPage : ContentPage
     {
         if (e.CurrentSelection.FirstOrDefault() is not UserSearchResponse user) return;
         ResultsList.SelectedItem = null;
-        await RunAsync(_ => OpenChatAsync(user.UserId));
+        await RunAsync(_ => ShowUserAsync(user.UserId));
     }
 
     private async Task OpenChatAsync(Guid userId)

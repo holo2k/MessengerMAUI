@@ -2,6 +2,7 @@ using Messenger.Application.Media;
 using Messenger.Domain.Media;
 using Messenger.Domain.Users;
 using Messenger.Domain.Music;
+using Messenger.Domain.Chats;
 using Messenger.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -69,6 +70,9 @@ public sealed class EfUploadStore(MessengerDbContext db) : IUploadStore
         {
             throw new MediaException(MediaError.NotFound);
         }
+        if (message.Kind is MessageKind.Voice or MessageKind.VideoNote &&
+            (objects.Length != 1 || !objects[0].ContentType.StartsWith(message.Kind == MessageKind.Voice ? "audio/" : "video/", StringComparison.OrdinalIgnoreCase)))
+            throw new MediaException(MediaError.InvalidDeclaration);
         for (var index = 0; index < objectIds.Count; index++)
         {
             db.MessageAttachments.Add(new MessageAttachment(message.Id, objectIds[index], index));

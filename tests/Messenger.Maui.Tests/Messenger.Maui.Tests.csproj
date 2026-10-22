@@ -38,11 +38,15 @@
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\SharedMediaViewModel.cs" Link="Features\Chats\SharedMediaViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Contacts\ContactsViewModel.cs" Link="Features\Contacts\ContactsViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Contacts\UserDetailsViewModel.cs" Link="Features\Contacts\UserDetailsViewModel.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Features\Contacts\AddContactViewModel.cs" Link="Features\Contacts\AddContactViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\MediaCaptureService.cs" Link="Services\MediaCaptureService.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\IGalleryService.cs" Link="Services\IGalleryService.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\AttachmentPickerViewModel.cs" Link="Features\Chats\AttachmentPickerViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\UploadClient.cs" Link="Services\UploadClient.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\MessageAttachmentClient.cs" Link="Services\MessageAttachmentClient.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\ChatNoteRecording.cs" Link="Services\ChatNoteRecording.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\ChatNotePlayback.cs" Link="Services\ChatNotePlayback.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Features\Chats\ChatRecordingViewModel.cs" Link="Features\Chats\ChatRecordingViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\MessageForwarder.cs" Link="Services\MessageForwarder.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\MediaComposerViewModel.cs" Link="Features\Chats\MediaComposerViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Music\MusicViewModel.cs" Link="Features\Music\MusicViewModel.cs" />

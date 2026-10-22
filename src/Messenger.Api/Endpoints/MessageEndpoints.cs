@@ -75,22 +75,42 @@ public static class MessageEndpoints
                 (await service.ListPinsAsync(UserId(principal), chatId, ct)).Select(ToResponse).ToArray(), null)))
             .Document("ListPinnedMessages", "Получить закреплённые сообщения", "Возвращает закреплённые сообщения выбранного чата.", "Сообщения");
         var messages = endpoints.MapGroup("/api/messages").RequireAuthorization();
+        messages.MapGet("/{messageId:guid}", async (Guid messageId, ClaimsPrincipal principal, IMessageService service, CancellationToken ct) =>
+            Results.Ok(ToResponse(await service.GetAsync(UserId(principal), messageId, ct))))
+            .Document("GetMessage", "Получить сообщение", "Возвращает доступное участнику сообщение с вложениями.", "Сообщения");
+        messages.MapPost("/{messageId:guid}/forward", async (Guid messageId, ForwardMessageRequest request,
+            ClaimsPrincipal principal, IMessageService service, IChatEventPublisher publisher, CancellationToken ct) =>
+        {
+            var forwarded = await service.ForwardAsync(UserId(principal), messageId, request.ChatId, request.ClientMessageId, ct);
+            await publisher.MessageCreatedAsync(new MessageCreatedEvent(request.ChatId, forwarded.Message.Id, forwarded.Message.Sequence), ct);
+            return Results.Ok(ToResponse(forwarded));
+        }).Document("ForwardMessage", "Переслать сообщение", "Пересылает текст, вложения или песню в выбранный чат.", "Сообщения");
         messages.MapPatch("/{messageId:guid}", async (
             Guid messageId,
             EditMessageRequest request,
             ClaimsPrincipal principal,
             IMessageService service,
-            CancellationToken ct) => Results.Ok(ToResponse(
-                await service.EditAsync(UserId(principal), messageId, request.Body, ct))))
+            IChatEventPublisher publisher,
+            CancellationToken ct) =>
+        {
+            var updated = await service.EditAsync(UserId(principal), messageId, request.Body, ct);
+            await publisher.MessageUpdatedAsync(new MessageUpdatedEvent(updated.Message.ChatId, messageId, updated.Message.Sequence), ct);
+            return Results.Ok(ToResponse(updated));
+        })
             .Document("EditMessage", "Изменить сообщение", "Редактирует текст сообщения при наличии прав автора.", "Сообщения");
         messages.MapDelete("/{messageId:guid}", async (
             Guid messageId,
             bool globally,
             ClaimsPrincipal principal,
             IMessageService service,
+            IChatEventPublisher publisher,
             CancellationToken ct) =>
         {
-            await service.DeleteAsync(UserId(principal), messageId, globally, ct);
+            var deleted = await service.DeleteAsync(UserId(principal), messageId, globally, ct);
+            if (globally)
+                await publisher.MessageDeletedAsync(new MessageDeletedEvent(deleted.ChatId, messageId, deleted.Sequence), ct);
+            else
+                await publisher.MessageHiddenAsync(UserId(principal), new MessageHiddenEvent(deleted.ChatId, messageId), ct);
             return Results.NoContent();
         }).Document("DeleteMessage", "Удалить сообщение", "Удаляет сообщение локально либо для всех участников при наличии прав.", "Сообщения");
         messages.MapPut("/{messageId:guid}/pin", async (
@@ -129,7 +149,7 @@ public static class MessageEndpoints
         view.MusicTrack is { } track ? new MusicTrackResponse(track.Id, track.Title, track.Artist,
             track.DurationMs, track.CoverObjectId, track.Status.ToString().ToLowerInvariant(), track.UploaderUserId) : null,
         view.Attachments?.Select(value => new StoredObjectResponse(value.Id, value.FileName, value.ContentType,
-            value.Size, value.Sha256, value.CreatedAt)).ToArray() ?? []);
+            value.Size, value.Sha256, value.CreatedAt)).ToArray() ?? [], view.Message.IsForwarded);
 
     private static long ParseCursor(string? cursor) => string.IsNullOrWhiteSpace(cursor)
         ? 0

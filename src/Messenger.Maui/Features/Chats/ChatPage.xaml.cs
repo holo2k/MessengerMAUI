@@ -15,6 +15,7 @@ public partial class ChatPage : ContentPage
 {
     private readonly ChatViewModel _viewModel;
     private readonly ChatSyncService _sync;
+    private readonly IServiceProvider _services;
     private readonly ChatResponse _chat;
     private readonly Func<Guid, Task>? _openProfile;
     private bool _isActive, _windowActive;
@@ -37,9 +38,11 @@ public partial class ChatPage : ContentPage
         ChatViewModel viewModel,
         ChatSyncService sync,
         ChatResponse chat,
+        IServiceProvider services,
         Guid currentUserId = default,
         Func<Guid, Task>? openProfile = null)
     {
+        _services = services;
         CurrentUserId = currentUserId;
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
@@ -69,10 +72,9 @@ public partial class ChatPage : ContentPage
         _isActive = _windowActive = true;
         if (_recording is null)
         {
-            var services = Handler!.MauiContext!.Services;
             _recording = new ChatRecordingViewModel(_viewModel.ChatId,
-                new NativeChatNoteRecorder(services.GetRequiredService<IAudioManager>(), RecordingCameraHost),
-                services.GetRequiredService<IMediaUploader>(), services.GetRequiredService<IConversationApi>());
+                new NativeChatNoteRecorder(_services.GetRequiredService<IAudioManager>(), RecordingCameraHost),
+                _services.GetRequiredService<IMediaUploader>(), _services.GetRequiredService<IConversationApi>());
             _recording.PropertyChanged += OnRecordingChanged;
             _recording.Sent += message => MainThread.BeginInvokeOnMainThread(() => _viewModel.Receive(message));
         }
@@ -184,7 +186,7 @@ public partial class ChatPage : ContentPage
             }
             else if (action == "Переслать")
             {
-                var api = Handler!.MauiContext!.Services.GetRequiredService<IConversationApi>();
+                var api = _services.GetRequiredService<IConversationApi>();
                 await Navigation.PushAsync(new MessageForwardPage(message, api,
                     async (target, clientId) => { await _viewModel.ForwardMessageAsync(message, target, clientId); }));
             }
@@ -264,7 +266,7 @@ public partial class ChatPage : ContentPage
     {
         if (_attachmentPicker is not null) { CloseAttachmentPicker(); return; }
         ComposerEntry.Unfocus();
-        var gallery = Handler!.MauiContext!.Services.GetRequiredService<IGalleryService>();
+        var gallery = _services.GetRequiredService<IGalleryService>();
         var picker = new AttachmentPickerView(gallery, Math.Max(0, MediaComposerViewModel.MaxAttachments - (_viewModel.Media?.Attachments.Count ?? 0)));
         _attachmentPicker = picker;
         picker.CloseRequested += CloseAttachmentPicker;
@@ -281,7 +283,7 @@ public partial class ChatPage : ContentPage
         CloseAttachmentPicker();
         if (action == AttachmentPickerAction.Music)
         {
-            var api = Handler!.MauiContext!.Services.GetRequiredService<IMusicApi>();
+            var api = _services.GetRequiredService<IMusicApi>();
             var clientIds = new Dictionary<Guid, Guid>();
             await Navigation.PushAsync(new MusicPickerPage(api, async track =>
             {
@@ -427,20 +429,28 @@ public partial class ChatPage : ContentPage
         RecordingStatus.IsVisible = recording.State is ChatRecordingState.Starting or ChatRecordingState.Recording || recording.IsLocked && _recordPointerDown;
         RecordingActions.IsVisible = (recording.IsLocked || recording.IsReview || recording.IsSending) && !_recordPointerDown;
         RecordingActions.IsEnabled = !recording.IsSending;
-        RecordingUploadProgress.IsVisible = recording.IsSending;
-        RecordingUploadProgress.Progress = recording.UploadProgress;
+        RecordingSendingIndicator.IsRunning = RecordingSendingIndicator.IsVisible = recording.IsSending;
+        SendRecordingButton.IsVisible = !recording.IsSending;
         RecordingCameraBorder.IsVisible = recording.ShowCamera;
         RecordingLockHint.IsVisible = recording.State == ChatRecordingState.Recording;
         StopRecordingButton.IsVisible = recording.IsCapturing;
-        RecordingTime.Text = "● " + recording.DurationText;
+        RecordingIndicator.IsVisible = recording.IsCapturing;
+        RecordingTime.Text = recording.DurationText;
         RecordingActionTime.Text = recording.IsSending ? "Отправка…" : recording.DurationText;
-        RecordingOverlayTime.Text = recording.State == ChatRecordingState.Starting ? "Подготовка…" : recording.DurationText;
-        RecordingHint.Text = recording.IsReview ? "Проверьте запись и нажмите отправить"
-            : recording.IsLocked ? "Запись закреплена — можно отпустить кнопку"
-            : recording.IsSending ? "Отправка сообщения…" : "Отпустите, чтобы отправить · вверх — закрепить";
+        RecordingOverlayTime.Text = recording.DurationText;
+        RecordingTitle.Text = recording.State == ChatRecordingState.Starting ? "Подготовка записи"
+            : recording.IsVideo ? "Видеосообщение" : "Голосовое сообщение";
+        RecordingModeIcon.Source = recording.IsVideo ? "icon_video_note.png" : "icon_mic.png";
+        RecordingHint.Text = recording.IsReview ? "Проверьте запись перед отправкой"
+            : recording.IsLocked ? "Запись продолжается. Нажмите стоп, когда закончите."
+            : recording.IsSending ? "Отправляем запись"
+            : recording.State == ChatRecordingState.Starting ? "Подготовка к записи"
+            : "Отпустите, чтобы отправить";
         RecordingError.Text = recording.Error;
         RecordingError.IsVisible = !string.IsNullOrWhiteSpace(recording.Error);
-        RecordingLimitProgress.Progress = recording.LimitProgress;
+        RecordingPanel.Margin = new Thickness(12, 12, _recordPointerDown ? 60 : 12, 12);
+        var cameraSize = Math.Clamp(Width - (_recordPointerDown ? 112 : 64), 120, 260);
+        RecordingCameraBorder.WidthRequest = RecordingCameraBorder.HeightRequest = cameraSize;
         RecordingDraftHost.IsVisible = recording.ShowDraft;
         RecordingDraftHost.IsEnabled = !recording.IsSending;
         if (!ReferenceEquals(_displayedRecording, recording.Draft))
@@ -508,7 +518,7 @@ public partial class ChatPage : ContentPage
     }
     private async void OnMediaClicked(object? sender, EventArgs e)
     {
-        await Navigation.PushAsync(new SharedMediaPage(_viewModel.ChatId, Handler!.MauiContext!.Services.GetRequiredService<IConversationApi>()));
+        await Navigation.PushAsync(new SharedMediaPage(_viewModel.ChatId, _services.GetRequiredService<IConversationApi>()));
     }
     private async void OnFileClicked(object? sender, EventArgs e) => await RunMediaAsync(MediaKind.File);
     private async void OnPhotoClicked(object? sender, EventArgs e) => await RunMediaAsync(MediaKind.Photo);

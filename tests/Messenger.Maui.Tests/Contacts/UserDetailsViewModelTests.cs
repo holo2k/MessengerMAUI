@@ -27,6 +27,7 @@ public sealed class UserDetailsViewModelTests
         Assert.Equal(userId, viewModel.UserId);
         Assert.Equal("Женя Работа", viewModel.DisplayName);
         Assert.True(viewModel.CanEdit);
+        Assert.False(viewModel.CanAdd);
         Assert.True(viewModel.IsMuted);
         Assert.Equal("+79512723576", viewModel.Phone);
         Assert.Equal(userId, api.ContactLookupUserId);
@@ -45,6 +46,7 @@ public sealed class UserDetailsViewModelTests
         await viewModel.LoadAsync(userId);
 
         Assert.False(viewModel.CanEdit);
+        Assert.True(viewModel.CanAdd);
         Assert.False(viewModel.CanCall);
         Assert.Null(viewModel.Phone);
         await Assert.ThrowsAsync<InvalidOperationException>(() => viewModel.SaveAliasAsync("Имя", null, false));
@@ -112,6 +114,7 @@ public sealed class UserDetailsViewModelTests
 
     private sealed class UserDetailsApi : IConversationApi
     {
+        public Task<ContactResponse> AddContactAsync(Guid userId, string? firstName, string? lastName, CancellationToken ct = default) => throw new NotSupportedException();
         public required UserSearchResponse User { get; init; }
         public List<ContactResponse> Contacts { get; } = [];
         public Guid? UpdatedContactId { get; private set; }
@@ -161,7 +164,8 @@ public sealed class UserDetailsViewModelTests
         public Task<ChatResponse> CreateDirectAsync(Guid userId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ChatResponse> CreateGroupAsync(string title, IReadOnlyList<Guid> userIds, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<MessageResponse> SendAsync(Guid chatId, Guid clientId, string body, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default,
+            long? durationMs = null, IReadOnlyList<byte>? waveform = null) => throw new NotSupportedException();
         public Task<IReadOnlyList<MessageResponse>> SearchAsync(Guid chatId, string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MessageResponse>>([]);
         public Task<IReadOnlyList<MessageResponse>> GetPinsAsync(Guid chatId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MessageResponse>>([]);
         public Task<IReadOnlyList<StoredObjectResponse>> GetChatMediaAsync(Guid chatId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<StoredObjectResponse>>([]);

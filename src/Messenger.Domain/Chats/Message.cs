@@ -9,7 +9,9 @@ public enum MessageKind
     Video = 2,
     Audio = 3,
     File = 4,
-    Music = 5
+    Music = 5,
+    Voice = 6,
+    VideoNote = 7
 }
 
 public enum MessageRuleError
@@ -75,7 +77,19 @@ public sealed class Message : Entity
     public Guid? DeletedByUserId { get; private set; }
     public Guid? MusicTrackId { get; private set; }
     public bool IsForwarded { get; private set; }
+    public long? DurationMs { get; private set; }
+    public byte[]? Waveform { get; private set; }
     public void MarkForwarded() => IsForwarded = true;
+
+    public void SetRecordingMetadata(long? durationMs, IReadOnlyList<byte>? waveform)
+    {
+        if (Kind is not (MessageKind.Voice or MessageKind.VideoNote) || durationMs is null or < 500 ||
+            durationMs > (Kind == MessageKind.VideoNote ? 60_000 : 600_000) ||
+            waveform is { Count: > 64 } || waveform?.Any(level => level > 100) == true)
+            throw new MessageRuleException(MessageRuleError.InvalidBody);
+        DurationMs = durationMs;
+        Waveform = waveform?.ToArray();
+    }
 
     public void AttachMusic(Guid trackId)
     {

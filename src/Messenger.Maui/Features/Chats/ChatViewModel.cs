@@ -36,7 +36,7 @@ public sealed class ChatViewModel(Guid chatId, IConversationApi api, MediaCompos
     public bool IsEditing => _editingMessage is not null;
 
     public bool CanEdit(MessageResponse message) => message.ChatId == chatId && message.SenderUserId == _currentUserId &&
-        message.DeletedAt is null && message.Type != "music";
+        message.DeletedAt is null && message.Type is not ("music" or "voice" or "video_note" or "videonote");
 
     public void BeginEdit(MessageResponse message)
     {

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Messenger.Maui.Features.Contacts" xmlns:contacts="clr-namespace:Messenger.Contracts.Contacts;assembly=Messenger.Contracts"
+             xmlns:ui="clr-namespace:Messenger.Maui.Controls" x:Class="Messenger.Maui.Features.Contacts.AddContactPage" x:DataType="vm:AddContactViewModel"
+             Title="Новый контакт" Shell.NavBarIsVisible="False" Shell.TabBarIsVisible="False" BackgroundColor="White">
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
+        <Grid ColumnDefinitions="80,*,100" HeightRequest="44" BackgroundColor="{StaticResource BarBackground}">
+            <Button Text="Отмена" Clicked="OnCancelClicked" FontSize="14" IsEnabled="{Binding IsSaving, Converter={StaticResource DisplayValue}, ConverterParameter=inverse}" />
+            <Label Grid.Column="1" Text="Новый контакт" Style="{StaticResource NavigationTitle}" />
+            <Button Grid.Column="2" Text="Добавить" FontSize="14" IsEnabled="{Binding CanSave}" Clicked="OnSaveClicked" />
+        </Grid>
+        <VerticalStackLayout Grid.Row="1" Padding="16,16,16,8" Spacing="6">
+            <Label Text="Телефон или username" Style="{StaticResource SecondaryLabel}" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <Border Style="{StaticResource SearchField}">
+                    <Entry x:Name="QueryEntry" Text="{Binding Query}" Placeholder="+7… или @username" ReturnType="Search" Completed="OnSearchClicked"
+                           IsEnabled="{Binding IsBusy, Converter={StaticResource DisplayValue}, ConverterParameter=inverse}" />
+                </Border>
+                <Button Grid.Column="1" Text="Найти" FontSize="14" IsEnabled="{Binding CanSearch}" Clicked="OnSearchClicked" />
+            </Grid>
+            <Label Text="Введите номер телефона или полный username пользователя." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+        </VerticalStackLayout>
+        <Grid Grid.Row="2" IsVisible="{Binding IsSaving}" Padding="16,4" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+            <ActivityIndicator IsRunning="{Binding IsSaving}" WidthRequest="20" HeightRequest="20" Color="{StaticResource Primary}" />
+            <Label Grid.Column="1" Text="Добавление контакта…" FontSize="13" VerticalOptions="Center" />
+        </Grid>
+        <Grid Grid.Row="3">
+            <ScrollView IsVisible="{Binding HasSelectedUser}">
+                <VerticalStackLayout Padding="16,16" Spacing="14" IsEnabled="{Binding IsBusy, Converter={StaticResource DisplayValue}, ConverterParameter=inverse}">
+                    <Grid ColumnDefinitions="48,*" ColumnSpacing="12">
+                        <ui:AvatarView Person="{Binding SelectedUser}" AvatarObjectId="{Binding SelectedUser.AvatarObjectId}" WidthRequest="48" HeightRequest="48" />
+                        <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                            <Label Text="{Binding SelectedUser, Converter={StaticResource DisplayValue}, ConverterParameter=name}" FontAttributes="Bold" LineBreakMode="TailTruncation" />
+                            <Label Text="{Binding SelectedUser.Username, StringFormat='@{0}'}" Style="{StaticResource SecondaryLabel}" />
+                        </VerticalStackLayout>
+                    </Grid>
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="Имя" Style="{StaticResource SecondaryLabel}" />
+                        <Entry Text="{Binding FirstName}" Placeholder="Имя" MaxLength="100" />
+                        <BoxView Style="{StaticResource SeparatorLine}" />
+                        <Label Text="Фамилия" Style="{StaticResource SecondaryLabel}" />
+                        <Entry Text="{Binding LastName}" Placeholder="Фамилия" MaxLength="100" />
+                        <BoxView Style="{StaticResource SeparatorLine}" />
+                    </VerticalStackLayout>
+                    <Label Text="Это имя будет видно только вам." FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                </VerticalStackLayout>
+            </ScrollView>
+            <ui:LoadingHost x:Name="SearchLoading" IsVisible="{Binding ShowResults}">
+                <CollectionView x:Name="ResultsList" ItemsSource="{Binding SearchResults}" SelectionMode="Single" SelectionChanged="OnUserSelected">
+                    <CollectionView.EmptyView><Label Text="Пользователь не найден. Проверьте телефон или username." HorizontalTextAlignment="Center" Margin="24" TextColor="{StaticResource TextSecondary}" /></CollectionView.EmptyView>
+                    <CollectionView.ItemTemplate><DataTemplate x:DataType="contacts:UserSearchResponse">
+                        <Grid ColumnDefinitions="40,*" Padding="16,10" ColumnSpacing="12">
+                            <ui:AvatarView Person="{Binding .}" AvatarObjectId="{Binding AvatarObjectId}" WidthRequest="40" HeightRequest="40" />
+                            <Label Grid.Column="1" Text="{Binding ., Converter={StaticResource DisplayValue}, ConverterParameter=name}" VerticalOptions="Center" />
+                        </Grid>
+                    </DataTemplate></CollectionView.ItemTemplate>
+                </CollectionView>
+            </ui:LoadingHost>
+        </Grid>
+    </Grid>
+</ContentPage>

@@ -55,7 +55,8 @@ public sealed class DisplayValueConverter : IValueConverter, IMultiValueConverte
         : message.Type == "music" ? message.MusicTrack is { } track ? $"{track.Title} — {track.Artist}" : "Трек недоступен"
         : !string.IsNullOrWhiteSpace(message.Body) ? message.Body : message.Type switch
         {
-            "image" or "photo" => "Фотография", "video" => "Видео", "audio" => "Аудиосообщение", _ => "Вложение"
+            "image" or "photo" => "Фотография", "video" => "Видео", "audio" or "voice" => "Голосовое сообщение",
+            "video_note" or "videonote" => "Видеосообщение", _ => "Вложение"
         };
 
     private static string Join(string first, string last) => $"{first} {last}".Trim();

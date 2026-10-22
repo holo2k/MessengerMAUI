@@ -10,6 +10,24 @@ namespace Messenger.Application.Tests.Chats;
 
 public sealed class MessageServiceTests
 {
+    [Theory]
+    [InlineData(MessageKind.Voice, "audio/wav")]
+    [InlineData(MessageKind.VideoNote, "video/mp4")]
+    public async Task Recordings_preserve_duration_and_waveform_when_forwarded_and_cannot_be_edited_as_text(MessageKind kind, string contentType)
+    {
+        var fixture = new Fixture(ChatType.Direct);
+        var source = await fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), kind, null,
+            durationMs: 1500, waveform: [5, 40, 100]);
+        fixture.Store.Attachments[source.Message.Id] = [new StoredObject(Guid.NewGuid(), fixture.UserId, "note", "note.bin", contentType,
+            10, "sha", StoredObjectStatus.Available, Fixture.Now)];
+        var forwarded = await fixture.Service.ForwardAsync(fixture.OtherUserId, source.Message.Id, fixture.Chat.Id, Guid.NewGuid());
+        Assert.Equal(1500, forwarded.Message.DurationMs);
+        Assert.Equal(new byte[] { 5, 40, 100 }, forwarded.Message.Waveform);
+        Assert.Equal(kind, forwarded.Message.Kind);
+        Assert.Single(forwarded.Attachments!);
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.EditAsync(fixture.UserId, source.Message.Id, "Подмена записи"));
+        await Assert.ThrowsAsync<MessageRuleException>(() => fixture.Service.SendAsync(fixture.UserId, fixture.Chat.Id, Guid.NewGuid(), kind, null));
+    }
     [Fact]
     public async Task Search_scans_older_batches_matches_case_and_yo_and_excludes_hidden_or_deleted_messages()
     {

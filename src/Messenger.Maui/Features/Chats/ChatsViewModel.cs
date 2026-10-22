@@ -39,9 +39,10 @@ public sealed class ChatListItem(
             {
                 return "Пока нет сообщений";
             }
+            if (message.DeletedAt is not null) return string.Empty;
 
             var value = message.DeletedAt.HasValue
-                ? "Сообщение удалено"
+                ? string.Empty
                 : message.Type switch
                 {
                     "text" => string.IsNullOrWhiteSpace(message.Body) ? "Сообщение" : message.Body,
@@ -61,7 +62,7 @@ public sealed class ChatListItem(
     {
         get
         {
-            if (Chat.LastMessage is not { } message)
+            if (Chat.LastMessage is not { DeletedAt: null } message)
             {
                 return string.Empty;
             }

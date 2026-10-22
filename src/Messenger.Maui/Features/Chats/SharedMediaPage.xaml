@@ -1,28 +1,48 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:media="clr-namespace:Messenger.Contracts.Media;assembly=Messenger.Contracts"
-             xmlns:ui="clr-namespace:Messenger.Maui.Controls"
-             x:Class="Messenger.Maui.Features.Chats.SharedMediaPage" Title="Медиа" Shell.NavBarIsVisible="False"
-             Shell.TabBarIsVisible="False" BackgroundColor="{StaticResource PageBackground}">
-    <Grid RowDefinitions="Auto,*">
+             xmlns:chats="clr-namespace:Messenger.Maui.Features.Chats" xmlns:ui="clr-namespace:Messenger.Maui.Controls"
+             x:Class="Messenger.Maui.Features.Chats.SharedMediaPage" x:Name="MediaScreen" x:DataType="chats:SharedMediaViewModel"
+             Title="Вложения" Shell.NavBarIsVisible="False" Shell.TabBarIsVisible="False" BackgroundColor="White">
+    <Grid RowDefinitions="Auto,Auto,*">
         <Grid ColumnDefinitions="80,*,80" HeightRequest="44" BackgroundColor="{StaticResource BarBackground}">
             <Button Text="Назад" Clicked="OnBackClicked" />
-            <Label Grid.Column="1" Text="Медиа" Style="{StaticResource NavigationTitle}" />
+            <Label Grid.Column="1" Text="Вложения" Style="{StaticResource NavigationTitle}" />
         </Grid>
-        <ui:LoadingHost x:Name="MediaLoading" Grid.Row="1" Kind="Gallery">
-        <CollectionView x:Name="MediaList" Margin="1">
-            <CollectionView.ItemsLayout><GridItemsLayout Orientation="Vertical" Span="3" HorizontalItemSpacing="1" VerticalItemSpacing="1" /></CollectionView.ItemsLayout>
-            <CollectionView.EmptyView><Label Text="В чате пока нет медиа" TextColor="{StaticResource TextSecondary}" HorizontalTextAlignment="Center" Margin="24,60" /></CollectionView.EmptyView>
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="media:StoredObjectResponse">
-                    <Grid RowDefinitions="*,Auto,Auto" BackgroundColor="White" Padding="10" HeightRequest="120" RowSpacing="4">
-                        <Image Source="icon_file.png" HeightRequest="36" WidthRequest="36" />
-                        <Label Grid.Row="1" Text="{Binding FileName}" FontSize="12" MaxLines="2" LineBreakMode="TailTruncation" />
-                        <Label Grid.Row="2" Text="{Binding ContentType}" FontSize="10" TextColor="{StaticResource TextSecondary}" LineBreakMode="TailTruncation" />
-                    </Grid>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+        <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*" Padding="4" BackgroundColor="{StaticResource BarBackground}">
+            <Button x:Name="MediaTab" Text="Медиа" FontSize="13" Padding="0" Clicked="OnFilterClicked" CommandParameter="Media" />
+            <Button x:Name="AudioTab" Grid.Column="1" Text="Аудио" FontSize="13" Padding="0" Clicked="OnFilterClicked" CommandParameter="Audio" />
+            <Button x:Name="FilesTab" Grid.Column="2" Text="Файлы" FontSize="13" Padding="0" Clicked="OnFilterClicked" CommandParameter="Files" />
+            <Button x:Name="LinksTab" Grid.Column="3" Text="Ссылки" FontSize="13" Padding="0" Clicked="OnFilterClicked" CommandParameter="Links" />
+        </Grid>
+        <ui:LoadingHost x:Name="MediaLoading" Grid.Row="2" Kind="Gallery">
+            <Grid SizeChanged="OnMediaSizeChanged">
+                <CollectionView ItemsSource="{Binding Items}" IsVisible="{Binding IsMedia}">
+                    <CollectionView.ItemsLayout><GridItemsLayout Orientation="Vertical" Span="3" HorizontalItemSpacing="1" VerticalItemSpacing="1" /></CollectionView.ItemsLayout>
+                    <CollectionView.EmptyView><Label Text="{Binding EmptyText}" TextColor="{StaticResource TextSecondary}" HorizontalTextAlignment="Center" Margin="24,60" /></CollectionView.EmptyView>
+                    <CollectionView.ItemTemplate><DataTemplate x:DataType="chats:SharedMediaItem">
+                        <Grid>
+                            <ui:MessageAttachmentView Attachment="{Binding Attachment}" ThumbnailSize="{Binding Source={x:Reference MediaScreen}, Path=TileSize, x:DataType=chats:SharedMediaPage}" />
+                            <Label Text="▶" TextColor="White" FontSize="18" Margin="8" HorizontalOptions="End" VerticalOptions="End" IsVisible="{Binding IsVideo}" InputTransparent="True" />
+                        </Grid>
+                    </DataTemplate></CollectionView.ItemTemplate>
+                </CollectionView>
+                <CollectionView ItemsSource="{Binding Items}" IsVisible="{Binding IsMedia, Converter={StaticResource DisplayValue}, ConverterParameter=inverse}">
+                    <CollectionView.EmptyView><Label Text="{Binding EmptyText}" TextColor="{StaticResource TextSecondary}" HorizontalTextAlignment="Center" Margin="24,60" /></CollectionView.EmptyView>
+                    <CollectionView.ItemTemplate><DataTemplate x:DataType="chats:SharedMediaItem">
+                        <Grid ColumnDefinitions="48,*" ColumnSpacing="12" Padding="16,12">
+                            <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnItemTapped" CommandParameter="{Binding .}" /></Grid.GestureRecognizers>
+                            <Grid WidthRequest="44" HeightRequest="44" BackgroundColor="{StaticResource PrimarySoft}">
+                                <Image Source="{Binding Icon}" WidthRequest="24" HeightRequest="24" />
+                                <ui:MusicArtworkView Track="{Binding Track}" IsVisible="{Binding HasTrack}" />
+                            </Grid>
+                            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                                <Label Text="{Binding Title}" FontSize="15" MaxLines="2" LineBreakMode="TailTruncation" />
+                                <Label Text="{Binding Subtitle}" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </DataTemplate></CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
         </ui:LoadingHost>
     </Grid>
 </ContentPage>

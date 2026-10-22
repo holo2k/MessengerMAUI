@@ -8,6 +8,16 @@ namespace Messenger.Infrastructure.Social;
 
 public sealed class EfMessageStore(MessengerDbContext dbContext) : IMessageStore
 {
+    public Task<bool> IsHiddenAsync(Guid messageId, Guid userId, CancellationToken cancellationToken) =>
+        dbContext.HiddenMessages.AnyAsync(hidden => hidden.MessageId == messageId && hidden.UserId == userId, cancellationToken);
+
+    public Task AddAttachmentsAsync(Guid messageId, IReadOnlyList<Guid> objectIds, CancellationToken cancellationToken)
+    {
+        for (var index = 0; index < objectIds.Count; index++)
+            dbContext.MessageAttachments.Add(new MessageAttachment(messageId, objectIds[index], index));
+        return Task.CompletedTask;
+    }
+
     public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<StoredObject>>> ListAttachmentsAsync(
         IReadOnlyCollection<Guid> messageIds, CancellationToken cancellationToken)
     {
@@ -38,20 +48,14 @@ public sealed class EfMessageStore(MessengerDbContext dbContext) : IMessageStore
                 !dbContext.HiddenMessages.Any(hidden => hidden.MessageId == message.Id && hidden.UserId == userId))
             .OrderBy(message => message.Sequence).Take(take).ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<Message>> SearchMessagesAsync(
+    public async Task<IReadOnlyList<Message>> ListSearchCandidatesAsync(
         Guid chatId,
         Guid userId,
-        IReadOnlyCollection<string> tokens,
+        long beforeSequence,
         int take,
         CancellationToken cancellationToken)
     {
-        var tokenArray = tokens.Distinct().ToArray();
-        var ids = await dbContext.MessageSearchTokens.Where(token => tokenArray.Contains(token.Token))
-            .GroupBy(token => token.MessageId)
-            .Where(group => group.Count() == tokenArray.Length)
-            .Select(group => group.Key)
-            .ToListAsync(cancellationToken);
-        return await dbContext.Messages.Where(message => message.ChatId == chatId && ids.Contains(message.Id) &&
+        return await dbContext.Messages.AsNoTracking().Where(message => message.ChatId == chatId && message.Sequence < beforeSequence &&
                 message.DeletedAt == null &&
                 !dbContext.HiddenMessages.Any(hidden => hidden.MessageId == message.Id && hidden.UserId == userId))
             .OrderByDescending(message => message.Sequence).Take(take).ToListAsync(cancellationToken);

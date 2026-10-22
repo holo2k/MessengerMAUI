@@ -80,6 +80,12 @@ public partial class ContactDetailsPage : ContentPage
     }
 
     private async void OnChatClicked(object? sender, EventArgs e) => await RunAsync(_openChat);
+    private async void OnAddContactClicked(object? sender, EventArgs e) => await RunAsync(async () =>
+    {
+        if (!_viewModel.CanAdd || _viewModel.User is not { } user) return;
+        var api = Handler!.MauiContext!.Services.GetRequiredService<IConversationApi>();
+        await Navigation.PushAsync(new AddContactPage(api, user));
+    });
     private async void OnAttachmentsTapped(object? sender, TappedEventArgs e) => await RunAsync(async () =>
     {
         var api = Handler!.MauiContext!.Services.GetRequiredService<IConversationApi>();

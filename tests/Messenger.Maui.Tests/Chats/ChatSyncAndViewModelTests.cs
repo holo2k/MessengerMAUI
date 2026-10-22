@@ -13,6 +13,174 @@ namespace Messenger.Maui.Tests.Chats;
 public sealed class ChatSyncAndViewModelTests
 {
     [Fact]
+    public async Task Search_finds_parts_of_words_in_loaded_history_and_tracks_edits_and_deletions()
+    {
+        var chatId = Guid.NewGuid();
+        var api = new FakeConversationApi();
+        var first = Message(chatId, 1) with { Body = "Вечером отправлю фотографию" };
+        var second = Message(chatId, 2) with { Body = "Ещё один снимок" };
+        var vm = new ChatViewModel(chatId, api);
+        vm.Receive(first);
+        vm.Receive(second);
+        // An older server's whole-word search returns no matches for a substring.
+        await vm.SearchAsync("ФОТО");
+        Assert.Equal(first.Id, Assert.Single(vm.SearchResults).Id);
+        vm.Receive(first with { Body = "Текст без снимков", EditedAt = DateTimeOffset.UtcNow });
+        Assert.Empty(vm.SearchResults);
+        vm.Receive(second with { Body = "Фотография готова", EditedAt = DateTimeOffset.UtcNow });
+        Assert.Equal(second.Id, Assert.Single(vm.SearchResults).Id);
+        vm.Receive(second with { DeletedAt = DateTimeOffset.UtcNow });
+        Assert.Empty(vm.SearchResults);
+        Assert.DoesNotContain(vm.Messages, value => value.Id == second.Id);
+        await vm.SearchAsync(" ");
+        Assert.Empty(vm.SearchResults);
+    }
+
+    [Fact]
+    public async Task Shared_attachments_filter_content_and_remove_deleted_media_without_removing_independent_copies()
+    {
+        var chatId = Guid.NewGuid();
+        var api = new FakeConversationApi();
+        StoredObjectResponse File(string name, string type) => new(Guid.NewGuid(), name, type, 2048, "sha", DateTimeOffset.UtcNow);
+        var photo = File("photo.jpg", "image/jpeg");
+        var video = File("video.mp4", "video/mp4");
+        var audio = File("voice.m4a", "audio/mp4");
+        var file = File("report.pdf", "application/pdf");
+        var first = Message(chatId, 1) with { Attachments = [photo, video, audio, file], Body = "Сайт https://example.com/page. И www.example.org/test" };
+        var duplicate = Message(chatId, 2) with { Attachments = [photo], Body = null };
+        var deleted = Message(chatId, 3) with { Attachments = [File("deleted.jpg", "image/jpeg")], DeletedAt = DateTimeOffset.UtcNow };
+        api.Messages.AddRange([first, duplicate, deleted]);
+        var vm = new SharedMediaViewModel(chatId, api);
+        await vm.LoadAsync();
+        Assert.Equal(2, vm.Items.Count);
+        Assert.Contains(vm.Items, value => value.IsVideo);
+        vm.RemoveMessage(duplicate.Id);
+        Assert.Equal(2, vm.Items.Count);
+        vm.Filter = SharedMediaFilter.Audio;
+        Assert.Equal(audio.Id, Assert.Single(vm.Items).Attachment!.Id);
+        vm.Filter = SharedMediaFilter.Files;
+        Assert.Equal(file.Id, Assert.Single(vm.Items).Attachment!.Id);
+        vm.Filter = SharedMediaFilter.Links;
+        Assert.Equal(["https://example.com/page", "https://www.example.org/test"], vm.Items.Select(value => value.Url));
+        vm.RemoveMessage(first.Id);
+        Assert.Empty(vm.Items);
+        vm.Filter = SharedMediaFilter.Media;
+        Assert.Empty(vm.Items);
+        await vm.LoadAsync();
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public async Task Editing_updates_history_search_and_pins_and_restores_the_unsent_draft()
+    {
+        var chatId = Guid.NewGuid();
+        var self = Guid.NewGuid();
+        var source = Message(chatId, 1) with { SenderUserId = self };
+        var api = new FakeConversationApi();
+        api.Messages.Add(source);
+        var viewModel = new ChatViewModel(chatId, api) { ComposerText = "Несохранённый черновик" };
+        viewModel.SetCurrentUser(self);
+        viewModel.Receive(source);
+        viewModel.SearchResults.Add(source);
+        viewModel.Pins.Add(source);
+        viewModel.BeginEdit(source);
+        viewModel.ComposerText = "Исправленный текст";
+
+        await viewModel.SendAsync();
+
+        Assert.False(viewModel.IsEditing);
+        Assert.Equal("Несохранённый черновик", viewModel.ComposerText);
+        Assert.All(new[] { viewModel.Messages, viewModel.SearchResults, viewModel.Pins }, rows =>
+            Assert.Equal("Исправленный текст", Assert.Single(rows).Body));
+        Assert.Equal((source.Id, "Исправленный текст"), Assert.Single(api.Edits));
+        viewModel.Receive(source);
+        Assert.Equal("Исправленный текст", viewModel.Messages[0].Body);
+    }
+
+    [Fact]
+    public async Task Failed_edits_preserve_typed_changes_and_deletion_only_removes_data_after_server_success()
+    {
+        var chatId = Guid.NewGuid();
+        var self = Guid.NewGuid();
+        var source = Message(chatId, 1) with { SenderUserId = self };
+        var api = new FakeConversationApi { EditFailure = new HttpRequestException("offline"), DeleteFailure = new HttpRequestException("offline") };
+        api.Messages.Add(source);
+        var viewModel = new ChatViewModel(chatId, api) { ComposerText = "Черновик" };
+        viewModel.SetCurrentUser(self);
+        viewModel.Receive(source);
+        viewModel.SearchResults.Add(source);
+        viewModel.Pins.Add(source);
+        viewModel.BeginEdit(source);
+        viewModel.ComposerText = "Новая редакция";
+        await Assert.ThrowsAsync<HttpRequestException>(() => viewModel.SendAsync());
+        Assert.True(viewModel.IsEditing);
+        Assert.Equal("Новая редакция", viewModel.ComposerText);
+        await Assert.ThrowsAsync<HttpRequestException>(() => viewModel.DeleteMessageAsync(source, globally: false));
+        Assert.Single(viewModel.Messages);
+        api.DeleteFailure = null;
+        await viewModel.DeleteMessageAsync(source, globally: false);
+        Assert.Empty(viewModel.Messages);
+        Assert.Empty(viewModel.SearchResults);
+        Assert.Empty(viewModel.Pins);
+        Assert.Equal("Черновик", viewModel.ComposerText);
+        viewModel.Receive(source);
+        Assert.Empty(viewModel.Messages);
+    }
+
+    [Fact]
+    public async Task Realtime_changes_apply_to_old_messages_and_reconnect_reconciles_missed_edits_and_hides()
+    {
+        var chatId = Guid.NewGuid();
+        var api = new FakeConversationApi();
+        var first = Message(chatId, 1);
+        var second = Message(chatId, 2);
+        api.Messages.AddRange([first, second]);
+        var realtime = new FakeRealtimeClient();
+        var sync = new ChatSyncService(api, realtime, new MemoryCursorStore { Cursor = 2 });
+        var viewModel = new ChatViewModel(chatId, api);
+        viewModel.Receive(first);
+        viewModel.Receive(second);
+        sync.MessageReceived += row => { viewModel.Receive(row); return Task.CompletedTask; };
+        sync.MessagesReconciled += rows => { viewModel.ApplySnapshot(rows); return Task.CompletedTask; };
+        sync.MessageRemoved += id => { viewModel.RemoveMessage(id); return Task.CompletedTask; };
+        await sync.StartAsync(chatId);
+        api.Messages[0] = first with { Body = "Правка", EditedAt = DateTimeOffset.UtcNow };
+        await realtime.EmitUpdatedAsync(new(chatId, first.Id, 1));
+        Assert.Equal("Правка", viewModel.Messages[0].Body);
+        api.Messages[0] = api.Messages[0] with { Body = "Правка офлайн", EditedAt = DateTimeOffset.UtcNow.AddSeconds(1) };
+        api.Messages.RemoveAt(1);
+        await realtime.ReconnectAsync();
+        Assert.Equal("Правка офлайн", Assert.Single(viewModel.Messages).Body);
+        api.Messages[0] = api.Messages[0] with { DeletedAt = DateTimeOffset.UtcNow, Body = null, Attachments = [] };
+        await realtime.EmitDeletedAsync(new(chatId, first.Id, 1));
+        Assert.Empty(viewModel.Messages);
+        viewModel.Receive(first);
+        Assert.Empty(viewModel.Messages);
+        await realtime.EmitHiddenAsync(new(chatId, first.Id));
+        Assert.Empty(viewModel.Messages);
+        sync.Stop();
+        await realtime.EmitUpdatedAsync(new(chatId, first.Id, 1));
+        Assert.Empty(viewModel.Messages);
+    }
+
+    [Fact]
+    public void Only_own_non_music_messages_can_be_edited_and_cancelling_restores_the_draft()
+    {
+        var chatId = Guid.NewGuid();
+        var self = Guid.NewGuid();
+        var viewModel = new ChatViewModel(chatId, new FakeConversationApi()) { ComposerText = "Черновик" };
+        viewModel.SetCurrentUser(self);
+        Assert.False(viewModel.CanEdit(Message(chatId, 1)));
+        var own = Message(chatId, 1) with { SenderUserId = self };
+        Assert.False(viewModel.CanEdit(own with { Type = "music" }));
+        Assert.False(viewModel.CanEdit(own with { DeletedAt = DateTimeOffset.UtcNow }));
+        viewModel.BeginEdit(own);
+        viewModel.ComposerText = "Временная правка";
+        viewModel.CancelEdit();
+        Assert.Equal("Черновик", viewModel.ComposerText);
+    }
+
+    [Fact]
     public async Task Startup_unauthorized_connection_uses_API_session_recovery_then_reconnects_without_losing_subscriptions()
     {
         var chat = Chat(Guid.NewGuid());
@@ -274,7 +442,7 @@ public sealed class ChatSyncAndViewModelTests
     [InlineData("video", null, false, "Видео")]
     [InlineData("audio", null, false, "Аудио")]
     [InlineData("file", null, false, "Файл")]
-    [InlineData("text", "Удалено", true, "Сообщение удалено")]
+    [InlineData("text", "Удалено", true, "")]
     public void Chat_list_item_maps_message_types(
         string type,
         string? body,
@@ -383,7 +551,7 @@ public sealed class ChatSyncAndViewModelTests
     {
         var api = new FakeConversationApi { SendFailure = new HttpRequestException("offline") };
         var chatId = Guid.NewGuid();
-        api.SearchResults.Add(Message(chatId, 4));
+        api.SearchResults.Add(Message(chatId, 4) with { Body = "Точное совпадение" });
         api.PinResults.Add(Message(chatId, 2));
         var viewModel = new ChatViewModel(chatId, api) { ComposerText = "Не потерять" };
 
@@ -553,6 +721,9 @@ public sealed class ChatSyncAndViewModelTests
         public int ConnectAttempts { get; private set; }
         public Action<int>? BeforeConnect { get; init; }
         public event Func<MessageCreatedEvent, Task>? MessageCreated;
+        public event Func<MessageUpdatedEvent, Task>? MessageUpdated;
+        public event Func<MessageDeletedEvent, Task>? MessageDeleted;
+        public event Func<MessageHiddenEvent, Task>? MessageHidden;
         public event Func<ReadPositionChangedEvent, Task>? ReadPositionChanged;
         public event Func<Task>? Reconnected;
         public event Action<ChatConnectionState>? ConnectionStateChanged;
@@ -573,6 +744,9 @@ public sealed class ChatSyncAndViewModelTests
             return Task.CompletedTask;
         }
         public Task EmitAsync(MessageCreatedEvent value) => MessageCreated?.Invoke(value) ?? Task.CompletedTask;
+        public Task EmitUpdatedAsync(MessageUpdatedEvent value) => MessageUpdated?.Invoke(value) ?? Task.CompletedTask;
+        public Task EmitDeletedAsync(MessageDeletedEvent value) => MessageDeleted?.Invoke(value) ?? Task.CompletedTask;
+        public Task EmitHiddenAsync(MessageHiddenEvent value) => MessageHidden?.Invoke(value) ?? Task.CompletedTask;
         public Task EmitReadAsync(ReadPositionChangedEvent value) => ReadPositionChanged?.Invoke(value) ?? Task.CompletedTask;
         public Task ReconnectAsync() => Reconnected?.Invoke() ?? Task.CompletedTask;
     }
@@ -600,6 +774,31 @@ public sealed class ChatSyncAndViewModelTests
 
     private sealed class FakeConversationApi : IConversationApi
     {
+        public Exception? EditFailure { get; set; }
+        public Exception? DeleteFailure { get; set; }
+        public List<(Guid Id, string Body)> Edits { get; } = [];
+        public List<(Guid Id, bool Globally)> Deletes { get; } = [];
+        public Task<MessageResponse> GetMessageAsync(Guid messageId, CancellationToken ct = default) =>
+            Task.FromResult(Messages.Single(message => message.Id == messageId));
+        public Task<MessageResponse> EditMessageAsync(Guid messageId, string body, CancellationToken ct = default)
+        {
+            if (EditFailure is not null) return Task.FromException<MessageResponse>(EditFailure);
+            Edits.Add((messageId, body));
+            var index = Messages.FindIndex(message => message.Id == messageId);
+            Messages[index] = Messages[index] with { Body = body, EditedAt = DateTimeOffset.UtcNow };
+            return Task.FromResult(Messages[index]);
+        }
+        public Task DeleteMessageAsync(Guid messageId, bool globally, CancellationToken ct = default)
+        {
+            if (DeleteFailure is not null) return Task.FromException(DeleteFailure);
+            Deletes.Add((messageId, globally));
+            var index = Messages.FindIndex(message => message.Id == messageId);
+            if (globally) Messages[index] = Messages[index] with { DeletedAt = DateTimeOffset.UtcNow, Body = null, Attachments = [], MusicTrack = null };
+            else Messages.RemoveAt(index);
+            return Task.CompletedTask;
+        }
+        public Task<MessageResponse> ForwardMessageAsync(Guid messageId, Guid targetChatId, Guid clientId, CancellationToken ct = default) =>
+            Task.FromResult(Messages.Single(message => message.Id == messageId) with { Id = Guid.NewGuid(), ChatId = targetChatId, ClientMessageId = clientId, IsForwarded = true });
         public List<ChatResponse> ChatRows { get; } = [];
         public List<ChatMemberResponse> Members { get; } = [];
         public List<long> ReadSequences { get; } = [];

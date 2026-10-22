@@ -87,7 +87,7 @@ public sealed class EfChatSummaryReader(
         var privacy = await dbContext.UserPrivacySettings.Where(value => peerIds.Contains(value.UserId))
             .ToDictionaryAsync(value => value.UserId, cancellationToken);
         var lastMessages = await dbContext.Messages
-            .Where(message => chatIds.Contains(message.ChatId) &&
+            .Where(message => chatIds.Contains(message.ChatId) && message.DeletedAt == null &&
                 !dbContext.HiddenMessages.Any(hidden => hidden.MessageId == message.Id && hidden.UserId == requesterUserId))
             .GroupBy(message => message.ChatId)
             .Select(group => group.OrderByDescending(message => message.Sequence).First())

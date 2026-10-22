@@ -162,6 +162,7 @@ public sealed class MusicViewModel : ObservableObject
             var auth = await api.AuthorizeAsync(track.Id, false, token);
             token.ThrowIfCancellationRequested();
             if (version != _playVersion) return;
+            ChatNotePlayback.Activate(this);
             await player.PlayAsync(auth.Url, token);
             if (version != _playVersion) return;
             _isPreparing = false;
@@ -236,7 +237,7 @@ public sealed class MusicViewModel : ObservableObject
     {
         if (!CanTogglePlayback || HasPlaybackError) return;
         if (player.IsPlaying) player.Pause();
-        else { if (_durationMs > 0 && _positionMs >= _durationMs) player.Seek(0); player.Resume(); }
+        else { ChatNotePlayback.Activate(this); if (_durationMs > 0 && _positionMs >= _durationMs) player.Seek(0); player.Resume(); }
         RefreshPlayback();
     }
     public void RefreshPlayback()

@@ -166,7 +166,7 @@ public sealed class MediaComposerTests
             Sent = await request.Content!.ReadFromJsonAsync<SendMessageRequest>(ct);
             return new(HttpStatusCode.OK)
             {
-                Content = JsonContent.Create(new MessageResponse(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, Sent!.ClientMessageId,
+                Content = JsonContent.Create(new MessageResponse(Guid.NewGuid(), Guid.Parse(request.RequestUri!.AbsolutePath.Split('/')[3]), Guid.NewGuid(), 1, Sent!.ClientMessageId,
                     Sent.Type, Sent.Body, false, DateTimeOffset.UtcNow, null, null))
             };
         }

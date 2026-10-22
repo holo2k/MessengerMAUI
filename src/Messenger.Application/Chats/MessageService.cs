@@ -39,11 +39,11 @@ public sealed partial class MessageService(
         var source = await GetAsync(senderUserId, messageId, cancellationToken);
         if (source.Message.DeletedAt is not null ||
             source.Message.Kind == MessageKind.Music && source.MusicTrack is null ||
-            source.Message.Kind is MessageKind.Image or MessageKind.Video or MessageKind.Audio or MessageKind.File && source.Attachments is not { Count: > 0 })
+            source.Message.Kind is MessageKind.Image or MessageKind.Video or MessageKind.Audio or MessageKind.File or MessageKind.Voice or MessageKind.VideoNote && source.Attachments is not { Count: > 0 })
             throw new MessageRuleException(MessageRuleError.NotFound);
         return await SendCoreAsync(senderUserId, targetChatId, clientMessageId, source.Message.Kind, source.Body,
             source.Message.MusicTrackId, cancellationToken, isForwarded: true,
-            attachmentIds: source.Attachments?.Select(value => value.Id).ToArray());
+            attachmentIds: source.Attachments?.Select(value => value.Id).ToArray(), durationMs: source.Message.DurationMs, waveform: source.Message.Waveform);
     }
 
     public Task<MessageView> SendMusicAsync(Guid senderUserId, Guid chatId, Guid clientMessageId, Guid trackId,
@@ -56,12 +56,12 @@ public sealed partial class MessageService(
         Guid clientMessageId,
         MessageKind kind,
         string? body,
-        CancellationToken cancellationToken = default) =>
-        SendCoreAsync(senderUserId, chatId, clientMessageId, kind, body, null, cancellationToken);
+        CancellationToken cancellationToken = default, long? durationMs = null, IReadOnlyList<byte>? waveform = null) =>
+        SendCoreAsync(senderUserId, chatId, clientMessageId, kind, body, null, cancellationToken, durationMs: durationMs, waveform: waveform);
 
     private async Task<MessageView> SendCoreAsync(Guid senderUserId, Guid chatId, Guid clientMessageId,
         MessageKind kind, string? body, Guid? trackId, CancellationToken cancellationToken,
-        bool isForwarded = false, IReadOnlyList<Guid>? attachmentIds = null)
+        bool isForwarded = false, IReadOnlyList<Guid>? attachmentIds = null, long? durationMs = null, IReadOnlyList<byte>? waveform = null)
     {
         await RequireMemberAsync(chatId, senderUserId, cancellationToken);
         var existing = await messageStore.FindByClientIdAsync(senderUserId, clientMessageId, cancellationToken);
@@ -93,6 +93,8 @@ public sealed partial class MessageService(
             Guid.NewGuid(), chatId, senderUserId, chat.NextMessageSequence(clock.UtcNow), clientMessageId,
             kind, encrypted.Ciphertext, encrypted.Nonce, encrypted.Tag, encrypted.KeyVersion, clock.UtcNow);
         if (track is not null) message.AttachMusic(track.Id);
+        if (kind is MessageKind.Voice or MessageKind.VideoNote) message.SetRecordingMetadata(durationMs, waveform);
+        else if (durationMs is not null || waveform is not null) throw new MessageRuleException(MessageRuleError.InvalidBody);
         if (isForwarded) message.MarkForwarded();
         await messageStore.AddMessageAsync(message, SearchTokens(message.Id, normalizedBody), cancellationToken);
         if (attachmentIds is { Count: > 0 })
@@ -131,7 +133,7 @@ public sealed partial class MessageService(
         CancellationToken cancellationToken = default)
     {
         var message = await RequireMessageForMemberAsync(requesterUserId, messageId, cancellationToken);
-        if (message.Kind == MessageKind.Music || message.Kind == MessageKind.Text && string.IsNullOrWhiteSpace(body))
+        if (message.Kind is MessageKind.Music or MessageKind.Voice or MessageKind.VideoNote || message.Kind == MessageKind.Text && string.IsNullOrWhiteSpace(body))
             throw new MessageRuleException(MessageRuleError.InvalidBody);
         body ??= string.Empty;
         var encrypted = cipher.Encrypt(body);

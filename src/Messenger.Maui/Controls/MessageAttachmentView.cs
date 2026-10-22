@@ -15,8 +15,17 @@ public sealed class MessageAttachmentView : ContentView
     private CancellationTokenSource? _load;
     private byte[]? _bytes;
     private bool _opening;
+    private ImageDimensions? _dimensions;
+    public static readonly BindableProperty ThumbnailSizeProperty = BindableProperty.Create(nameof(ThumbnailSize), typeof(double), typeof(MessageAttachmentView), 0d,
+        propertyChanged: (view, _, _) => ((MessageAttachmentView)view).UpdateDisplaySize());
+    public double ThumbnailSize { get => (double)GetValue(ThumbnailSizeProperty); set => SetValue(ThumbnailSizeProperty, value); }
+    public static readonly BindableProperty MaxImageWidthProperty = BindableProperty.Create(nameof(MaxImageWidth), typeof(double), typeof(MessageAttachmentView), 280d,
+        propertyChanged: (view, _, _) => ((MessageAttachmentView)view).UpdateDisplaySize());
+    public double MaxImageWidth { get => (double)GetValue(MaxImageWidthProperty); set => SetValue(MaxImageWidthProperty, value); }
+    public event EventHandler? DisplaySizeChanged;
     public StoredObjectResponse? Attachment { get => (StoredObjectResponse?)GetValue(AttachmentProperty); set => SetValue(AttachmentProperty, value); }
     private bool IsImage => Attachment?.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true;
+    private bool HasPreview => IsImage || Attachment?.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true;
     private IMessageAttachmentClient? Client => Handler?.MauiContext?.Services.GetService(typeof(IMessageAttachmentClient)) as IMessageAttachmentClient;
 
     public MessageAttachmentView()
@@ -31,12 +40,9 @@ public sealed class MessageAttachmentView : ContentView
         tap.Tapped += OnTapped;
         GestureRecognizers.Add(tap);
         HandlerChanged += (_, _) => Reload();
-        Loaded += (_, _) => { if (_bytes is null) Reload(); };
+        Loaded += (_, _) => { if (_image.Source is null && (_load is null || _load.IsCancellationRequested)) Reload(); };
         Unloaded += (_, _) => { _load?.Cancel(); _image.Source = null; _bytes = null; };
-        SizeChanged += (_, _) =>
-        {
-            if (IsImage && Width > 0 && Math.Abs(HeightRequest - Width) > 0.5) HeightRequest = Width;
-        };
+        HorizontalOptions = LayoutOptions.Center;
     }
 
     private void Reload()
@@ -45,17 +51,18 @@ public sealed class MessageAttachmentView : ContentView
         _load?.Dispose();
         _load = null;
         _bytes = null;
+        _dimensions = null;
         _image.Source = null;
         _status.IsVisible = true;
         _loading.IsRunning = _loading.IsVisible = false;
         _skeleton.IsVisible = false;
         if (Attachment is not { } attachment) return;
-        _skeleton.IsVisible = IsImage;
-        _status.IsVisible = !IsImage;
-        HeightRequest = IsImage ? (Width > 0 ? Width : 260) : 64;
+        _skeleton.IsVisible = HasPreview;
+        _status.IsVisible = !HasPreview;
+        UpdateDisplaySize();
         _status.Text = attachment.FileName;
         SemanticProperties.SetDescription(this, attachment.FileName);
-        if (!IsImage || Client is not { } client) return;
+        if (!HasPreview || Client is not { } client) return;
         _load = new();
         _ = LoadImageAsync(client, attachment, _load.Token);
     }
@@ -69,12 +76,19 @@ public sealed class MessageAttachmentView : ContentView
             byte[] bytes;
             try
             {
-                using var buffer = new MemoryStream();
-                await client.DownloadAsync(attachment.Id, buffer, ct);
-                ct.ThrowIfCancellationRequested();
-                _bytes = bytes = buffer.ToArray();
+                if (IsImage)
+                {
+                    using var buffer = new MemoryStream();
+                    await client.DownloadAsync(attachment.Id, buffer, ct);
+                    ct.ThrowIfCancellationRequested();
+                    _bytes = bytes = buffer.ToArray();
+                }
+                else bytes = await VideoThumbnail.CreateAsync(attachment, client, ct);
             }
             finally { ImageSlots.Release(); }
+            ct.ThrowIfCancellationRequested();
+            _dimensions = ImageDimensions.Read(bytes);
+            UpdateDisplaySize();
             _image.Source = ImageSource.FromStream(() => new MemoryStream(bytes, writable: false));
             _status.IsVisible = false;
         }
@@ -83,8 +97,9 @@ public sealed class MessageAttachmentView : ContentView
         {
             if (!ct.IsCancellationRequested)
             {
+                _bytes = null;
                 _status.IsVisible = true;
-                _status.Text = "Не удалось загрузить фото. Нажмите, чтобы повторить.";
+                _status.Text = IsImage ? "Не удалось загрузить фото. Нажмите, чтобы повторить." : "▶ Видео";
             }
         }
         finally
@@ -97,6 +112,17 @@ public sealed class MessageAttachmentView : ContentView
         }
     }
 
+    private void UpdateDisplaySize()
+    {
+        var width = Math.Max(1, MaxImageWidth);
+        _image.Aspect = ThumbnailSize > 0 ? Aspect.AspectFill : Aspect.AspectFit;
+        var size = ThumbnailSize > 0 ? new ImageDimensions(ThumbnailSize, ThumbnailSize)
+            : HasPreview ? (_dimensions?.Fit(width, 420) ?? new ImageDimensions(width, width * 2 / 3)) : new ImageDimensions(width, 64);
+        WidthRequest = size.Width;
+        HeightRequest = size.Height;
+        DisplaySizeChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     private async void OnTapped(object? sender, TappedEventArgs e)
     {
         if (_opening || Attachment is not { } attachment || Client is not { } client) return;
@@ -104,17 +130,7 @@ public sealed class MessageAttachmentView : ContentView
         _opening = true;
         try
         {
-            var folder = Path.Combine(FileSystem.CacheDirectory, "message-attachments", attachment.Id.ToString("N"));
-            Directory.CreateDirectory(folder);
-            var name = Path.GetFileName(attachment.FileName.Replace('\\', '/'));
-            if (string.IsNullOrWhiteSpace(name)) name = "attachment";
-            var path = Path.Combine(folder, name);
-            await using (var file = File.Create(path))
-            {
-                if (_bytes is { } bytes) await file.WriteAsync(bytes);
-                else await client.DownloadAsync(attachment.Id, file);
-            }
-            await Launcher.Default.OpenAsync(new OpenFileRequest(attachment.FileName, new ReadOnlyFile(path, attachment.ContentType)));
+            await AttachmentFile.OpenAsync(attachment, client, _bytes);
         }
         catch (Exception exception) { await Shell.Current.DisplayAlertAsync("Вложение", exception.Message, "OK"); }
         finally { _opening = false; }

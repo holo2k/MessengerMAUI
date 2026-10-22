@@ -35,6 +35,7 @@
     <Compile Include="..\..\src\Messenger.Maui\Services\ConversationClient.cs" Link="Services\ConversationClient.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\ChatsViewModel.cs" Link="Features\Chats\ChatsViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\ChatViewModel.cs" Link="Features\Chats\ChatViewModel.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Features\Chats\SharedMediaViewModel.cs" Link="Features\Chats\SharedMediaViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Contacts\ContactsViewModel.cs" Link="Features\Contacts\ContactsViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Contacts\UserDetailsViewModel.cs" Link="Features\Contacts\UserDetailsViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\MediaCaptureService.cs" Link="Services\MediaCaptureService.cs" />
@@ -42,6 +43,7 @@
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\AttachmentPickerViewModel.cs" Link="Features\Chats\AttachmentPickerViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\UploadClient.cs" Link="Services\UploadClient.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\MessageAttachmentClient.cs" Link="Services\MessageAttachmentClient.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\MessageForwarder.cs" Link="Services\MessageForwarder.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Chats\MediaComposerViewModel.cs" Link="Features\Chats\MediaComposerViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Music\MusicViewModel.cs" Link="Features\Music\MusicViewModel.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\MusicServices.cs" Link="Services\MusicServices.cs" />
@@ -49,6 +51,7 @@
     <Compile Include="..\..\src\Messenger.Maui\Services\ApiEndpointOptions.cs" Link="Services\ApiEndpointOptions.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\ExceptionDisplay.cs" Link="Services\ExceptionDisplay.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Services\ScreenLoadState.cs" Link="Services\ScreenLoadState.cs" />
+    <Compile Include="..\..\src\Messenger.Maui\Services\ImageDimensions.cs" Link="Services\ImageDimensions.cs" />
     <Compile Include="..\..\src\Messenger.Maui\Features\Settings\SettingsViewModel.cs" Link="Features\Settings\SettingsViewModel.cs" />
   </ItemGroup>
 

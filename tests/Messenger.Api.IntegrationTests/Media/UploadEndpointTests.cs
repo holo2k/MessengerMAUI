@@ -84,6 +84,27 @@ public sealed class UploadEndpointTests : IAsyncLifetime
 
         Authorize(client, outsider);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/objects/{stored.Id}/download")).StatusCode);
+
+        // A recipient can forward a private photo without owning or uploading the object again.
+        Authorize(client, recipient);
+        var target = await PostAsync<ChatResponse>(client, "/api/chats/direct", new CreateDirectChatRequest(outsider.UserId));
+        var request = new ForwardMessageRequest(target.Id, Guid.NewGuid());
+        var forwarded = await PostAsync<MessageResponse>(client, $"/api/messages/{photoMessage.Id}/forward", request);
+        var retry = await PostAsync<MessageResponse>(client, $"/api/messages/{photoMessage.Id}/forward", request);
+        Assert.Equal(forwarded.Id, retry.Id);
+        Assert.True(forwarded.IsForwarded);
+        Assert.Equal(persistedStored, Assert.Single(forwarded.Attachments!));
+
+        Authorize(client, owner);
+        (await client.DeleteAsync($"/api/messages/{photoMessage.Id}?globally=true")).EnsureSuccessStatusCode();
+        Authorize(client, recipient);
+        Assert.Empty((await client.GetFromJsonAsync<StoredObjectResponse[]>($"/api/chats/{chat.Id}/media"))!);
+        Authorize(client, outsider);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/objects/{stored.Id}/download")).StatusCode);
+        Assert.Equal(stored.Id, Assert.Single((await client.GetFromJsonAsync<StoredObjectResponse[]>($"/api/chats/{target.Id}/media"))!).Id);
+        (await client.DeleteAsync($"/api/messages/{forwarded.Id}?globally=false")).EnsureSuccessStatusCode();
+        Assert.Empty((await client.GetFromJsonAsync<StoredObjectResponse[]>($"/api/chats/{target.Id}/media"))!);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/objects/{stored.Id}/download")).StatusCode);
     }
 
     [Fact]

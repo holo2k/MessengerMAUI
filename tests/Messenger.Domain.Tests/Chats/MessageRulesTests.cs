@@ -32,18 +32,20 @@ public sealed class MessageRulesTests
     }
 
     [Fact]
-    public void Sender_can_delete_globally_only_during_the_first_48_hours()
+    public void Sender_can_delete_globally_without_a_time_limit_but_other_users_cannot()
     {
         var senderId = Guid.NewGuid();
         var recent = Message(senderId);
         var old = Message(senderId);
 
         recent.DeleteGlobally(senderId, Now.AddHours(48));
+        old.DeleteGlobally(senderId, Now.AddYears(2));
         var error = Assert.Throws<MessageRuleException>(() =>
-            old.DeleteGlobally(senderId, Now.AddHours(48).AddTicks(1)));
+            Message(senderId).DeleteGlobally(Guid.NewGuid(), Now.AddYears(2)));
 
         Assert.NotNull(recent.DeletedAt);
-        Assert.Equal(MessageRuleError.DeleteWindowExpired, error.Code);
+        Assert.NotNull(old.DeletedAt);
+        Assert.Equal(MessageRuleError.Forbidden, error.Code);
     }
 
     [Fact]

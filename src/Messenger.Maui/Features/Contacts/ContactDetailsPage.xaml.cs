@@ -1,3 +1,7 @@
+using Messenger.Maui.Services;
+using Messenger.Maui.Features.Chats;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace Messenger.Maui.Features.Contacts;
 
 public partial class ContactDetailsPage : ContentPage
@@ -76,6 +80,12 @@ public partial class ContactDetailsPage : ContentPage
     }
 
     private async void OnChatClicked(object? sender, EventArgs e) => await RunAsync(_openChat);
+    private async void OnAttachmentsTapped(object? sender, TappedEventArgs e) => await RunAsync(async () =>
+    {
+        var api = Handler!.MauiContext!.Services.GetRequiredService<IConversationApi>();
+        var chat = (await api.GetChatsAsync()).FirstOrDefault(value => value.Type == "direct" && value.Peer?.UserId == _userId);
+        await Navigation.PushAsync(new SharedMediaPage(chat?.Id ?? Guid.Empty, api));
+    });
     private async void OnCallClicked(object? sender, EventArgs e) => await RunAsync(_viewModel.CallAsync);
     private async Task RunAsync(Func<Task> action)
     {

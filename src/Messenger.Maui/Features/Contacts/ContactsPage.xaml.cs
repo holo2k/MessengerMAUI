@@ -83,7 +83,7 @@ public partial class ContactsPage : ContentPage
         var chat = await _api.CreateDirectAsync(userId);
         var session = await _services.GetRequiredService<ISecureSessionStore>().GetAsync();
         await Navigation.PushAsync(new ChatPage(
-            new ChatViewModel(chat.Id, _api, _services.GetRequiredService<MediaComposerViewModel>()),
+            new ChatViewModel(chat.Id, _api, _services.GetRequiredService<MediaComposerViewModel>(), _services.GetRequiredService<MessageForwarder>()),
             _services.GetRequiredService<ChatSyncService>(), chat,
             session?.Session.UserId ?? Guid.Empty, ShowUserAsync));
     }

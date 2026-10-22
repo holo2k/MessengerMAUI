@@ -19,6 +19,9 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IMusicRealtimeClie
             .Build();
         _connection.On<MessageCreatedEvent>("MessageCreated", message =>
             MessageCreated?.Invoke(message) ?? Task.CompletedTask);
+        _connection.On<MessageUpdatedEvent>("MessageUpdated", message => MessageUpdated?.Invoke(message) ?? Task.CompletedTask);
+        _connection.On<MessageDeletedEvent>("MessageDeleted", message => MessageDeleted?.Invoke(message) ?? Task.CompletedTask);
+        _connection.On<MessageHiddenEvent>("MessageHidden", message => MessageHidden?.Invoke(message) ?? Task.CompletedTask);
         _connection.On<ReadPositionChangedEvent>("ReadPositionChanged", message =>
             ReadPositionChanged?.Invoke(message) ?? Task.CompletedTask);
         _connection.On<MusicTrackStatusChangedEvent>("MusicTrackStatusChanged", message =>
@@ -47,6 +50,9 @@ public sealed class ChatRealtimeClient : IChatRealtimeClient, IMusicRealtimeClie
     }
 
     public event Func<MessageCreatedEvent, Task>? MessageCreated;
+    public event Func<MessageUpdatedEvent, Task>? MessageUpdated;
+    public event Func<MessageDeletedEvent, Task>? MessageDeleted;
+    public event Func<MessageHiddenEvent, Task>? MessageHidden;
     public event Func<ReadPositionChangedEvent, Task>? ReadPositionChanged;
     public event Func<Task>? Reconnected;
     public event Action<ChatConnectionState>? ConnectionStateChanged;

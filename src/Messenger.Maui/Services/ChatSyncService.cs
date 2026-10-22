@@ -15,6 +15,9 @@ public enum ChatConnectionState
 public interface IChatRealtimeClient
 {
     event Func<MessageCreatedEvent, Task>? MessageCreated;
+    event Func<MessageUpdatedEvent, Task>? MessageUpdated;
+    event Func<MessageDeletedEvent, Task>? MessageDeleted;
+    event Func<MessageHiddenEvent, Task>? MessageHidden;
     event Func<ReadPositionChangedEvent, Task>? ReadPositionChanged;
     event Func<Task>? Reconnected;
     event Action<ChatConnectionState>? ConnectionStateChanged;
@@ -40,6 +43,8 @@ public sealed class ChatSyncService(
     private int _generation;
 
     public event Func<MessageResponse, Task>? MessageReceived;
+    public event Func<IReadOnlyList<MessageResponse>, Task>? MessagesReconciled;
+    public event Func<Guid, Task>? MessageRemoved;
     public event Func<ReadPositionChangedEvent, Task>? ReadPositionChanged;
     public event Func<IReadOnlyList<ChatMemberResponse>, Task>? ReadPositionsLoaded;
     public event Action<ChatConnectionState>? ConnectionStateChanged;
@@ -56,6 +61,9 @@ public sealed class ChatSyncService(
             if (!IsCurrent(generation)) return;
             _cursor = cursor;
             realtime.MessageCreated += OnMessageCreatedAsync;
+            realtime.MessageUpdated += OnMessageUpdatedAsync;
+            realtime.MessageDeleted += OnMessageDeletedAsync;
+            realtime.MessageHidden += OnMessageHiddenAsync;
             realtime.ReadPositionChanged += OnReadPositionChangedAsync;
             realtime.Reconnected += OnReconnectedAsync;
             realtime.ConnectionStateChanged += OnConnectionStateChanged;
@@ -81,12 +89,45 @@ public sealed class ChatSyncService(
         _started = false;
         _generation++;
         realtime.MessageCreated -= OnMessageCreatedAsync;
+        realtime.MessageUpdated -= OnMessageUpdatedAsync;
+        realtime.MessageDeleted -= OnMessageDeletedAsync;
+        realtime.MessageHidden -= OnMessageHiddenAsync;
         realtime.ReadPositionChanged -= OnReadPositionChangedAsync;
         realtime.Reconnected -= OnReconnectedAsync;
         realtime.ConnectionStateChanged -= OnConnectionStateChanged;
     }
 
-    private Task OnReconnectedAsync() => _started ? ReconcileAsync(_generation) : Task.CompletedTask;
+    private Task OnReconnectedAsync() => _started ? ReconcileAsync(_generation, fullHistory: true) : Task.CompletedTask;
+
+    private Task OnMessageUpdatedAsync(MessageUpdatedEvent message) => RefreshMessageAsync(message.ChatId, message.MessageId);
+    private Task OnMessageDeletedAsync(MessageDeletedEvent message) => RefreshMessageAsync(message.ChatId, message.MessageId);
+
+    private async Task OnMessageHiddenAsync(MessageHiddenEvent message)
+    {
+        if (!_started || message.ChatId != _chatId) return;
+        var generation = _generation;
+        await _reconcileLock.WaitAsync();
+        try { if (IsCurrent(generation) && MessageRemoved is not null) await MessageRemoved(message.MessageId); }
+        finally { _reconcileLock.Release(); }
+    }
+
+    private async Task RefreshMessageAsync(Guid chatId, Guid messageId)
+    {
+        if (!_started || chatId != _chatId) return;
+        var generation = _generation;
+        await _reconcileLock.WaitAsync();
+        try
+        {
+            if (!IsCurrent(generation)) return;
+            var message = await api.GetMessageAsync(messageId);
+            if (IsCurrent(generation) && MessageReceived is not null) await MessageReceived(message);
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            if (IsCurrent(generation) && MessageRemoved is not null) await MessageRemoved(messageId);
+        }
+        finally { _reconcileLock.Release(); }
+    }
 
     private Task OnReadPositionChangedAsync(ReadPositionChangedEvent position) =>
         _started && position.ChatId == _chatId
@@ -97,15 +138,16 @@ public sealed class ChatSyncService(
 
     private bool IsCurrent(int generation) => _started && generation == _generation;
 
-    private async Task ReconcileAsync(int generation, CancellationToken cancellationToken = default)
+    private async Task ReconcileAsync(int generation, CancellationToken cancellationToken = default, bool fullHistory = false)
     {
         await _reconcileLock.WaitAsync(cancellationToken);
         try
         {
             if (!IsCurrent(generation)) return;
             var chatId = _chatId;
-            var messages = await api.GetMessagesAsync(chatId, _cursor, cancellationToken);
+            var messages = await api.GetMessagesAsync(chatId, fullHistory ? 0 : _cursor, cancellationToken);
             if (!IsCurrent(generation)) return;
+            if (fullHistory && MessagesReconciled is not null) await MessagesReconciled(messages);
             foreach (var message in messages.OrderBy(message => message.Sequence))
             {
                 if (!IsCurrent(generation)) return;

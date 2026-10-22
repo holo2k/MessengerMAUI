@@ -4,6 +4,22 @@ namespace Messenger.Domain.Tests.Chats;
 
 public sealed class MessageRulesTests
 {
+    [Theory]
+    [InlineData(MessageKind.Voice, 600000)]
+    [InlineData(MessageKind.VideoNote, 60000)]
+    public void Recording_metadata_is_bounded_and_copied_without_reusing_mutable_waveform_arrays(MessageKind kind, long maximum)
+    {
+        var message = new Message(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, Guid.NewGuid(), kind, "body", "nonce", "tag", 1, Now);
+        byte[] waveform = [0, 50, 100];
+        message.SetRecordingMetadata(maximum, waveform);
+        waveform[1] = 0;
+        Assert.Equal(50, message.Waveform![1]);
+        Assert.Equal(maximum, message.DurationMs);
+        Assert.Throws<MessageRuleException>(() => message.SetRecordingMetadata(maximum + 1, []));
+        Assert.Throws<MessageRuleException>(() => message.SetRecordingMetadata(100, []));
+        Assert.Throws<MessageRuleException>(() => message.SetRecordingMetadata(1000, new byte[65]));
+        Assert.Throws<MessageRuleException>(() => message.SetRecordingMetadata(1000, [101]));
+    }
     private static readonly DateTimeOffset Now = new(2026, 10, 3, 8, 0, 0, TimeSpan.Zero);
 
     [Fact]

@@ -26,6 +26,7 @@
                         <ImageButton Grid.Column="2" Source="icon_phone.png" Clicked="OnCallClicked" IsEnabled="{Binding CanCall}" BackgroundColor="{StaticResource OutgoingBubble}" CornerRadius="22" SemanticProperties.Description="Позвонить" />
                     </Grid>
                     <BoxView Style="{StaticResource SeparatorLine}" />
+                    <Button Text="Добавить в контакты" Clicked="OnAddContactClicked" IsVisible="{Binding CanAdd}" HorizontalOptions="Start" Margin="4,4" />
                     <VerticalStackLayout Padding="16,14" BackgroundColor="White" Spacing="6">
                         <Label Text="{Binding Bio, TargetNullValue='Не указано'}" FontSize="15" />
                         <Label Text="Био" Style="{StaticResource SecondaryLabel}" />

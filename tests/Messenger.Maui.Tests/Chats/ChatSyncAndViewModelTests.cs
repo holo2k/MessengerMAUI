@@ -774,6 +774,7 @@ public sealed class ChatSyncAndViewModelTests
 
     private sealed class FakeConversationApi : IConversationApi
     {
+        public Task<ContactResponse> AddContactAsync(Guid userId, string? firstName, string? lastName, CancellationToken ct = default) => throw new NotSupportedException();
         public Exception? EditFailure { get; set; }
         public Exception? DeleteFailure { get; set; }
         public List<(Guid Id, string Body)> Edits { get; } = [];
@@ -877,7 +878,8 @@ public sealed class ChatSyncAndViewModelTests
         public Task<ChatResponse> CreateGroupAsync(string title, IReadOnlyList<Guid> userIds, CancellationToken ct = default) { GroupCreates++; return Task.FromResult(Chat(Guid.NewGuid())); }
         public Task<MessageResponse> SendAsync(Guid chatId, Guid clientId, string body, CancellationToken ct = default) =>
             SendFailure is null ? Task.FromResult(Message(chatId, 1)) : Task.FromException<MessageResponse>(SendFailure);
-        public Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default) =>
+        public Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default,
+            long? durationMs = null, IReadOnlyList<byte>? waveform = null) =>
             SendFailure is null ? Task.FromResult(Message(chatId, 1)) : Task.FromException<MessageResponse>(SendFailure);
         public Task<IReadOnlyList<MessageResponse>> SearchAsync(Guid chatId, string query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MessageResponse>>(SearchResults);
         public Task<IReadOnlyList<MessageResponse>> GetPinsAsync(Guid chatId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MessageResponse>>(PinResults);

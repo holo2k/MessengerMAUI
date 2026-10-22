@@ -27,6 +27,8 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(message => message.DeletedByUserId).HasColumnName("deleted_by_user_id");
         builder.Property(message => message.MusicTrackId).HasColumnName("music_track_id");
         builder.Property(message => message.IsForwarded).HasColumnName("is_forwarded");
+        builder.Property(message => message.DurationMs).HasColumnName("duration_ms");
+        builder.Property(message => message.Waveform).HasColumnName("waveform");
         builder.HasOne<MusicTrack>().WithMany().HasForeignKey(message => message.MusicTrackId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(message => new { message.SenderUserId, message.ClientMessageId }).IsUnique();
         builder.HasIndex(message => new { message.ChatId, message.Sequence }).IsUnique();

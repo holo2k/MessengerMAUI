@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Net;
 using Messenger.Contracts.Chats;
 using Messenger.Contracts.Contacts;
 using Messenger.Contracts.Messages;
@@ -28,11 +29,13 @@ public interface IConversationApi
     Task<ChatResponse> CreateDirectAsync(Guid userId, CancellationToken ct = default);
     Task<ChatResponse> CreateGroupAsync(string title, IReadOnlyList<Guid> userIds, CancellationToken ct = default);
     Task<MessageResponse> SendAsync(Guid chatId, Guid clientId, string body, CancellationToken ct = default);
-    Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default);
+    Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default,
+        long? durationMs = null, IReadOnlyList<byte>? waveform = null);
     Task<IReadOnlyList<MessageResponse>> SearchAsync(Guid chatId, string query, CancellationToken ct = default);
     Task<IReadOnlyList<MessageResponse>> GetPinsAsync(Guid chatId, CancellationToken ct = default);
     Task<IReadOnlyList<StoredObjectResponse>> GetChatMediaAsync(Guid chatId, CancellationToken ct = default);
     Task<ContactResponse> UpdateContactAsync(Guid contactId, UpdateContactRequest request, CancellationToken ct = default);
+    Task<ContactResponse> AddContactAsync(Guid userId, string? localFirstName, string? localLastName, CancellationToken ct = default);
 }
 
 public interface IPhoneDialer
@@ -85,8 +88,39 @@ public sealed class ConversationClient(HttpClient httpClient) : IConversationApi
     public async Task<IReadOnlyList<ChatFolderResponse>> GetFoldersAsync(CancellationToken ct = default) =>
         await httpClient.GetFromJsonAsync<List<ChatFolderResponse>>("api/chat-folders", ct) ?? [];
 
-    public async Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default) =>
-        (await httpClient.GetFromJsonAsync<ContactPageResponse>("api/contacts?limit=100", ct))?.Items ?? [];
+    public async Task<IReadOnlyList<ContactResponse>> GetContactsAsync(CancellationToken ct = default)
+    {
+        var contacts = new List<ContactResponse>();
+        string? cursor = null;
+        var cursors = new HashSet<string>();
+        do
+        {
+            var path = "api/contacts?limit=100" + (cursor is null ? string.Empty : $"&cursor={Uri.EscapeDataString(cursor)}");
+            var page = await httpClient.GetFromJsonAsync<ContactPageResponse>(path, ct) ?? throw new InvalidDataException("Missing contacts response.");
+            contacts.AddRange(page.Items);
+            cursor = page.NextCursor;
+            if (cursor is not null && !cursors.Add(cursor)) throw new InvalidDataException("Invalid contacts cursor.");
+        } while (cursor is not null);
+        return contacts;
+    }
+
+    public async Task<ContactResponse> AddContactAsync(Guid userId, string? localFirstName, string? localLastName, CancellationToken ct = default)
+    {
+        static string? Alias(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        using var response = await httpClient.PostAsJsonAsync("api/contacts/", new CreateContactRequest(userId, Alias(localFirstName), Alias(localLastName)), ct);
+        if (response.StatusCode == HttpStatusCode.Conflict)
+        {
+            // A previous attempt or another device may have already added the contact.
+            if (await GetContactByUserAsync(userId, ct) is { } existing) return existing;
+            throw new HttpRequestException("Контакт уже добавлен. Обновите список контактов.", null, response.StatusCode);
+        }
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            throw new HttpRequestException("Пользователь больше недоступен. Повторите поиск.", null, response.StatusCode);
+        if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
+            throw new HttpRequestException("Нельзя добавить выбранного пользователя в контакты.", null, response.StatusCode);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ContactResponse>(ct) ?? throw new InvalidDataException("Missing contact response.");
+    }
 
     public async Task<ContactResponse?> GetContactByUserAsync(Guid userId, CancellationToken ct = default)
     {
@@ -111,7 +145,7 @@ public sealed class ConversationClient(HttpClient httpClient) : IConversationApi
 
     public async Task<IReadOnlyList<UserSearchResponse>> SearchUsersAsync(string query, CancellationToken ct = default) =>
         (await httpClient.GetFromJsonAsync<UserSearchPageResponse>(
-            $"api/users/search?query={Uri.EscapeDataString(query)}", ct))?.Items ?? [];
+            $"api/users/search?query={Uri.EscapeDataString(query.Trim().TrimStart('@'))}", ct))?.Items ?? [];
 
     public async Task<UserSearchResponse> GetVisibleUserAsync(Guid userId, CancellationToken ct = default) =>
         await httpClient.GetFromJsonAsync<UserSearchResponse>($"api/users/{userId}", ct)
@@ -155,8 +189,9 @@ public sealed class ConversationClient(HttpClient httpClient) : IConversationApi
     public Task<MessageResponse> SendAsync(Guid chatId, Guid clientId, string body, CancellationToken ct = default) =>
         PostAsync<MessageResponse>($"api/chats/{chatId}/messages", new SendMessageRequest(clientId, "text", body), ct);
 
-    public Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default) =>
-        PostAsync<MessageResponse>($"api/chats/{chatId}/messages", new SendMessageRequest(clientId, type, body, objectIds), ct);
+    public Task<MessageResponse> SendWithAttachmentsAsync(Guid chatId, Guid clientId, string type, string? body, IReadOnlyList<Guid> objectIds, CancellationToken ct = default,
+        long? durationMs = null, IReadOnlyList<byte>? waveform = null) =>
+        PostAsync<MessageResponse>($"api/chats/{chatId}/messages", new SendMessageRequest(clientId, type, body, objectIds, DurationMs: durationMs, Waveform: waveform), ct);
 
     public async Task<IReadOnlyList<MessageResponse>> SearchAsync(Guid chatId, string query, CancellationToken ct = default) =>
         (await httpClient.GetFromJsonAsync<MessagePageResponse>(

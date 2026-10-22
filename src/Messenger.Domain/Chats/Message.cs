@@ -16,7 +16,6 @@ public enum MessageRuleError
 {
     NotFound,
     Forbidden,
-    DeleteWindowExpired,
     InvalidBody
 }
 
@@ -75,6 +74,8 @@ public sealed class Message : Entity
     public DateTimeOffset? DeletedAt { get; private set; }
     public Guid? DeletedByUserId { get; private set; }
     public Guid? MusicTrackId { get; private set; }
+    public bool IsForwarded { get; private set; }
+    public void MarkForwarded() => IsForwarded = true;
 
     public void AttachMusic(Guid trackId)
     {
@@ -107,10 +108,6 @@ public sealed class Message : Entity
         if (requesterUserId != SenderUserId)
         {
             throw new MessageRuleException(MessageRuleError.Forbidden);
-        }
-        if (now > CreatedAt.AddHours(48))
-        {
-            throw new MessageRuleException(MessageRuleError.DeleteWindowExpired);
         }
         DeletedAt ??= now;
         DeletedByUserId ??= requesterUserId;

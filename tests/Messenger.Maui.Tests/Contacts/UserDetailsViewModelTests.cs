@@ -144,6 +144,10 @@ public sealed class UserDetailsViewModelTests
         }
 
         public Task<IReadOnlyList<ChatResponse>> GetChatsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ChatResponse>>([]);
+        public Task<MessageResponse> GetMessageAsync(Guid messageId, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<MessageResponse> EditMessageAsync(Guid messageId, string body, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task DeleteMessageAsync(Guid messageId, bool globally, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<MessageResponse> ForwardMessageAsync(Guid messageId, Guid targetChatId, Guid clientId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ChatResponse> GetChatAsync(Guid chatId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<ChatMemberResponse>> GetChatMembersAsync(Guid chatId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<ChatMemberResponse>>([]);

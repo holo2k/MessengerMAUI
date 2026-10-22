@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:chats="clr-namespace:Messenger.Maui.Features.Chats" xmlns:ui="clr-namespace:Messenger.Maui.Controls"
+             x:Class="Messenger.Maui.Features.Chats.MessageForwardPage" x:DataType="chats:MessageForwardPage"
+             Title="Переслать сообщение" Shell.NavBarIsVisible="False" Shell.TabBarIsVisible="False" BackgroundColor="White">
+    <Grid RowDefinitions="Auto,Auto,*">
+        <Grid ColumnDefinitions="60,*,60" HeightRequest="44" BackgroundColor="{StaticResource BarBackground}">
+            <Button Text="Назад" Clicked="OnBackClicked" FontSize="13" Padding="0" />
+            <Label Grid.Column="1" Text="Переслать сообщение" Style="{StaticResource NavigationTitle}" />
+        </Grid>
+        <VerticalStackLayout Grid.Row="1" Padding="16,12" Spacing="6">
+            <Label Text="{Binding Preview}" FontSize="14" MaxLines="2" LineBreakMode="TailTruncation" />
+            <Label Text="Выберите чат" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+        </VerticalStackLayout>
+        <ui:LoadingHost x:Name="ChatsLoading" Grid.Row="2" Kind="Chats">
+            <CollectionView x:Name="ChatChoices" ItemsSource="{Binding Chats}" SelectionMode="Single" SelectionChanged="OnChatSelected">
+                <CollectionView.EmptyView><Label Text="Нет доступных чатов" HorizontalTextAlignment="Center" Margin="24" /></CollectionView.EmptyView>
+                <CollectionView.ItemTemplate><DataTemplate x:DataType="chats:ChatListItem">
+                    <Grid ColumnDefinitions="48,*" ColumnSpacing="12" Padding="16,10">
+                        <ui:AvatarView Person="{Binding Title}" AvatarObjectId="{Binding AvatarObjectId}" WidthRequest="48" HeightRequest="48" />
+                        <Label Grid.Column="1" Text="{Binding Title}" FontSize="16" VerticalTextAlignment="Center" LineBreakMode="TailTruncation" />
+                    </Grid>
+                </DataTemplate></CollectionView.ItemTemplate>
+            </CollectionView>
+        </ui:LoadingHost>
+        <Grid x:Name="SendingOverlay" Grid.RowSpan="3" BackgroundColor="#CCFFFFFF" IsVisible="False">
+            <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
+                <ActivityIndicator IsRunning="True" Color="{StaticResource Primary}" />
+                <Label Text="Пересылка…" />
+            </VerticalStackLayout>
+        </Grid>
+    </Grid>
+</ContentPage>

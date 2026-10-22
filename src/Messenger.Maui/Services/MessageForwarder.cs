@@ -43,7 +43,7 @@ public sealed class MessageForwarder(IConversationApi api, IMediaUploader upload
                     }
                     copied.Add(copy);
                 }
-                sent = await api.SendWithAttachmentsAsync(targetChatId, clientId, current.Type, current.Body, copied.Select(file => file.Id).ToArray(), ct);
+                sent = await api.SendWithAttachmentsAsync(targetChatId, clientId, current.Type, current.Body, copied.Select(file => file.Id).ToArray(), ct, current.DurationMs, current.Waveform);
                 if (sent.Attachments is not { Count: > 0 }) sent = sent with { Attachments = copied };
             }
             foreach (var key in _copies.Keys.Where(key => key.ClientId == clientId).ToArray()) _copies.Remove(key);

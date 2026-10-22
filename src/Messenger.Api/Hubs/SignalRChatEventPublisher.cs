@@ -11,6 +11,8 @@ public sealed class SignalRChatEventPublisher(IHubContext<ChatHub> hub) : IChatE
         PublishAsync(message.ChatId, "MessageUpdated", message, cancellationToken);
     public Task MessageDeletedAsync(MessageDeletedEvent message, CancellationToken cancellationToken = default) =>
         PublishAsync(message.ChatId, "MessageDeleted", message, cancellationToken);
+    public Task MessageHiddenAsync(Guid userId, MessageHiddenEvent message, CancellationToken cancellationToken = default) =>
+        hub.Clients.User(userId.ToString()).SendAsync("MessageHidden", message, cancellationToken);
     public Task ReadPositionChangedAsync(ReadPositionChangedEvent message, CancellationToken cancellationToken = default) =>
         PublishAsync(message.ChatId, "ReadPositionChanged", message, cancellationToken);
     public Task ChatChangedAsync(ChatChangedEvent message, CancellationToken cancellationToken = default) =>

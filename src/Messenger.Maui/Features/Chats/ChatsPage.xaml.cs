@@ -67,6 +67,7 @@ public partial class ChatsPage : ContentPage
         }
 
         _listSync.ChatChanged += OnChatChangedAsync;
+        _listSync.SummaryChanged += OnSummaryChangedAsync;
         _listSync.ReloadRequested += OnReloadRequestedAsync;
         _listSyncAttached = true;
     }
@@ -79,12 +80,16 @@ public partial class ChatsPage : ContentPage
         }
 
         _listSync.ChatChanged -= OnChatChangedAsync;
+        _listSync.SummaryChanged -= OnSummaryChangedAsync;
         _listSync.ReloadRequested -= OnReloadRequestedAsync;
         _listSyncAttached = false;
     }
 
     private Task OnChatChangedAsync(ChatResponse chat, Messenger.Contracts.Realtime.MessageCreatedEvent _) =>
         MainThread.InvokeOnMainThreadAsync(() => _viewModel.Upsert(chat, incrementUnread: true));
+
+    private Task OnSummaryChangedAsync(ChatResponse chat) =>
+        MainThread.InvokeOnMainThreadAsync(() => _viewModel.Upsert(chat, incrementUnread: false));
 
     private Task OnReloadRequestedAsync() =>
         MainThread.InvokeOnMainThreadAsync(() => SafeRunAsync(_viewModel.LoadAsync));
@@ -127,7 +132,7 @@ public partial class ChatsPage : ContentPage
         var media = _services.GetRequiredService<MediaComposerViewModel>();
         var store = _services.GetRequiredService<ISecureSessionStore>();
         var session = await store.GetAsync();
-        await Navigation.PushAsync(new ChatPage(new ChatViewModel(item.Chat.Id, _api, media), sync,
+        await Navigation.PushAsync(new ChatPage(new ChatViewModel(item.Chat.Id, _api, media, _services.GetRequiredService<MessageForwarder>()), sync,
             item.Chat, session?.Session.UserId ?? Guid.Empty, OpenPeerProfileAsync));
     }
 

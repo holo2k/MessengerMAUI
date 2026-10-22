@@ -57,6 +57,39 @@ public sealed class SignalRTests : IAsyncLifetime
         Assert.True(await db.Messages.AnyAsync(message => message.Id == realtime.MessageId));
         await Task.Delay(150);
         Assert.False(outsiderEvents.Reader.TryRead(out _));
+
+        var updates = Channel.CreateUnbounded<MessageUpdatedEvent>();
+        var deletions = Channel.CreateUnbounded<MessageDeletedEvent>();
+        var hidden = Channel.CreateUnbounded<MessageHiddenEvent>();
+        var senderHidden = Channel.CreateUnbounded<MessageHiddenEvent>();
+        var outsiderUpdates = Channel.CreateUnbounded<MessageUpdatedEvent>();
+        var outsiderDeletions = Channel.CreateUnbounded<MessageDeletedEvent>();
+        recipientConnection.On<MessageUpdatedEvent>("MessageUpdated", value => updates.Writer.TryWrite(value));
+        recipientConnection.On<MessageDeletedEvent>("MessageDeleted", value => deletions.Writer.TryWrite(value));
+        recipientConnection.On<MessageHiddenEvent>("MessageHidden", value => hidden.Writer.TryWrite(value));
+        outsiderConnection.On<MessageUpdatedEvent>("MessageUpdated", value => outsiderUpdates.Writer.TryWrite(value));
+        outsiderConnection.On<MessageDeletedEvent>("MessageDeleted", value => outsiderDeletions.Writer.TryWrite(value));
+        await using var senderConnection = Connection(factory, sender.AccessToken);
+        senderConnection.On<MessageHiddenEvent>("MessageHidden", value => senderHidden.Writer.TryWrite(value));
+        await senderConnection.StartAsync();
+        await senderConnection.InvokeAsync("Ready");
+        using var changesTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        (await client.PatchAsJsonAsync($"/api/messages/{sent.Id}", new EditMessageRequest("Исправлено"))).EnsureSuccessStatusCode();
+        Assert.Equal(new MessageUpdatedEvent(chat.Id, sent.Id, sent.Sequence), await updates.Reader.ReadAsync(changesTimeout.Token));
+        Authorize(client, recipient);
+        Assert.Equal("Исправлено", (await client.GetFromJsonAsync<MessageResponse>($"/api/messages/{sent.Id}"))!.Body);
+        (await client.DeleteAsync($"/api/messages/{sent.Id}?globally=false")).EnsureSuccessStatusCode();
+        Assert.Equal(new MessageHiddenEvent(chat.Id, sent.Id), await hidden.Reader.ReadAsync(changesTimeout.Token));
+        Authorize(client, sender);
+        (await client.DeleteAsync($"/api/messages/{sent.Id}?globally=true")).EnsureSuccessStatusCode();
+        Assert.Equal(new MessageDeletedEvent(chat.Id, sent.Id, sent.Sequence), await deletions.Reader.ReadAsync(changesTimeout.Token));
+        var deleted = await client.GetFromJsonAsync<MessageResponse>($"/api/messages/{sent.Id}");
+        Assert.NotNull(deleted!.DeletedAt);
+        Assert.Null(deleted.Body);
+        Assert.False(senderHidden.Reader.TryRead(out _));
+        Assert.False(outsiderUpdates.Reader.TryRead(out _));
+        Assert.False(outsiderDeletions.Reader.TryRead(out _));
     }
 
     [Fact]

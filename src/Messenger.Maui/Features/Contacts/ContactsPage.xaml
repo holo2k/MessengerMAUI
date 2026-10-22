@@ -5,7 +5,7 @@
              x:Class="Messenger.Maui.Features.Contacts.ContactsPage" x:DataType="vm:ContactsViewModel"
              Title="Контакты" Shell.NavBarIsVisible="False" BackgroundColor="{StaticResource White}">
     <Grid RowDefinitions="Auto,*">
-        <Grid ColumnDefinitions="*,Auto" Padding="12,6" BackgroundColor="{StaticResource BarBackground}">
+        <Grid ColumnDefinitions="*,Auto,44" Padding="12,6" BackgroundColor="{StaticResource BarBackground}">
             <Border Style="{StaticResource SearchField}">
                 <Grid ColumnDefinitions="*,36">
                     <Entry x:Name="SearchEntry" Placeholder="Телефон или @username" ReturnType="Search" Completed="OnSearchClicked" TextChanged="OnSearchTextChanged" MinimumHeightRequest="36" />
@@ -13,6 +13,7 @@
                 </Grid>
             </Border>
             <Button x:Name="CancelSearchButton" Grid.Column="1" Text="Отмена" FontSize="14" Clicked="OnCancelSearchClicked" IsVisible="False" />
+            <ImageButton Grid.Column="2" Source="icon_plus.png" Clicked="OnAddContactClicked" SemanticProperties.Description="Добавить контакт" />
         </Grid>
         <ui:LoadingHost x:Name="ContactsLoading" Grid.Row="1">
         <Grid>

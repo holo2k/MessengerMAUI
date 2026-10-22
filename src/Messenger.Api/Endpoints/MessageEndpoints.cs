@@ -41,12 +41,14 @@ public static class MessageEndpoints
             CancellationToken ct) =>
         {
             var kind = ParseKind(request.Type);
+            if (kind is MessageKind.Voice or MessageKind.VideoNote && (request.AttachmentObjectIds is not { Count: 1 } || !string.IsNullOrWhiteSpace(request.Body)))
+                throw new FormatException("A recording requires exactly one attachment and no caption.");
             if (kind == MessageKind.Music && (request.MusicTrackId is null || request.AttachmentObjectIds is { Count: > 0 }) ||
                 kind != MessageKind.Music && request.MusicTrackId is not null)
                 throw new FormatException("Invalid music message.");
             var sent = kind == MessageKind.Music
                 ? await service.SendMusicAsync(UserId(principal), chatId, request.ClientMessageId, request.MusicTrackId!.Value, ct)
-                : await service.SendAsync(UserId(principal), chatId, request.ClientMessageId, kind, request.Body, ct);
+                : await service.SendAsync(UserId(principal), chatId, request.ClientMessageId, kind, request.Body, ct, request.DurationMs, request.Waveform);
             if (request.AttachmentObjectIds is { Count: > 0 })
             {
                 await attachments.AttachToMessageAsync(
@@ -140,7 +142,7 @@ public static class MessageEndpoints
         view.Message.SenderUserId,
         view.Message.Sequence,
         view.Message.ClientMessageId,
-        view.Message.Kind.ToString().ToLowerInvariant(),
+        view.Message.Kind == MessageKind.VideoNote ? "video_note" : view.Message.Kind.ToString().ToLowerInvariant(),
         view.Body,
         view.IsPinned,
         view.Message.CreatedAt,
@@ -149,7 +151,7 @@ public static class MessageEndpoints
         view.MusicTrack is { } track ? new MusicTrackResponse(track.Id, track.Title, track.Artist,
             track.DurationMs, track.CoverObjectId, track.Status.ToString().ToLowerInvariant(), track.UploaderUserId) : null,
         view.Attachments?.Select(value => new StoredObjectResponse(value.Id, value.FileName, value.ContentType,
-            value.Size, value.Sha256, value.CreatedAt)).ToArray() ?? [], view.Message.IsForwarded);
+            value.Size, value.Sha256, value.CreatedAt)).ToArray() ?? [], view.Message.IsForwarded, view.Message.DurationMs, view.Message.Waveform);
 
     private static long ParseCursor(string? cursor) => string.IsNullOrWhiteSpace(cursor)
         ? 0
@@ -165,6 +167,8 @@ public static class MessageEndpoints
         "audio" => MessageKind.Audio,
         "file" => MessageKind.File,
         "music" => MessageKind.Music,
+        "voice" => MessageKind.Voice,
+        "video_note" or "videonote" => MessageKind.VideoNote,
         _ => throw new FormatException("Unknown message type.")
     };
 

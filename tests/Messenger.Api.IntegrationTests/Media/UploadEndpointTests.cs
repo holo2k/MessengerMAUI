@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Messenger.Api.IntegrationTests.Auth;
 using Messenger.Contracts.Auth;
 using Messenger.Contracts.Media;
@@ -54,8 +55,11 @@ public sealed class UploadEndpointTests : IAsyncLifetime
         Assert.Equal(received.DurationMs, forwarded.DurationMs);
         Assert.Equal(received.Waveform, forwarded.Waveform);
         Assert.Equal(stored.Id, Assert.Single(forwarded.Attachments!).Id);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync($"/api/chats/{chat.Id}/messages",
-            new SendMessageRequest(Guid.NewGuid(), type, null, DurationMs: 2000))).StatusCode);
+        using var invalidRecording = await client.PostAsJsonAsync($"/api/chats/{chat.Id}/messages",
+            new SendMessageRequest(Guid.NewGuid(), type, null, DurationMs: 2000));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, invalidRecording.StatusCode);
+        var problem = await invalidRecording.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("validation_error", problem.GetProperty("code").GetString());
     }
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")

@@ -24,7 +24,10 @@ public sealed class EfUploadStore(MessengerDbContext db) : IUploadStore
         if (await (from attachment in db.MessageAttachments
             join message in db.Messages on attachment.MessageId equals message.Id
             join member in db.ChatMembers on message.ChatId equals member.ChatId
+            join chat in db.Chats on message.ChatId equals chat.Id
             where attachment.ObjectId == objectId && member.UserId == userId && member.LeftAt == null
+                  && message.DeletedAt == null && chat.DeletedAt == null
+                  && !db.HiddenMessages.Any(hidden => hidden.MessageId == message.Id && hidden.UserId == userId)
             select attachment).AnyAsync(ct))
         {
             return true;
@@ -82,7 +85,8 @@ public sealed class EfUploadStore(MessengerDbContext db) : IUploadStore
         return await (from attachment in db.MessageAttachments
                       join message in db.Messages on attachment.MessageId equals message.Id
                       join value in db.StoredObjects on attachment.ObjectId equals value.Id
-                      where message.ChatId == chatId && value.Status == StoredObjectStatus.Available
+                      where message.ChatId == chatId && value.Status == StoredObjectStatus.Available && message.DeletedAt == null
+                            && !db.HiddenMessages.Any(hidden => hidden.MessageId == message.Id && hidden.UserId == actorId)
                       orderby message.Sequence descending, attachment.Position
                       select value).ToArrayAsync(ct);
     }

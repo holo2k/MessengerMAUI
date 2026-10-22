@@ -55,7 +55,9 @@ public interface IMessageService
         Guid clientMessageId,
         MessageKind kind,
         string? body,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        long? durationMs = null,
+        IReadOnlyList<byte>? waveform = null);
     Task<IReadOnlyList<MessageView>> ListAsync(
         Guid requesterUserId,
         Guid chatId,
